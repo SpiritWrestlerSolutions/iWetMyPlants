@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - iWetMyPlants</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Settings</h1>
+        <a href="/" class="back-link">Back to Dashboard</a>
+    </header>
+
+    <main>
+        <!-- Device Settings -->
+        <section class="card">
+            <h2>Device</h2>
+            <form id="device-form">
+                <div class="form-group">
+                    <label for="device-name">Device Name</label>
+                    <input type="text" id="device-name" name="device_name" maxlength="31">
+                </div>
+                <button type="submit" class="btn-primary">Save Device Settings</button>
+            </form>
+        </section>
+
+        <!-- WiFi Settings -->
+        <section class="card">
+            <h2>WiFi</h2>
+            <form id="wifi-form">
+                <div class="form-group">
+                    <label for="wifi-ssid">SSID</label>
+                    <input type="text" id="wifi-ssid" name="ssid" maxlength="32">
+                    <button type="button" id="btn-scan" class="btn-secondary">Scan</button>
+                </div>
+                <div id="wifi-networks" class="network-list" style="display:none;"></div>
+                <div class="form-group">
+                    <label for="wifi-password">Password</label>
+                    <input type="password" id="wifi-password" name="password" maxlength="64">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="wifi-static" name="use_static_ip">
+                        Use Static IP
+                    </label>
+                </div>
+                <div id="static-ip-fields" style="display:none;">
+                    <div class="form-group">
+                        <label for="wifi-ip">IP Address</label>
+                        <input type="text" id="wifi-ip" name="static_ip" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label for="wifi-gateway">Gateway</label>
+                        <input type="text" id="wifi-gateway" name="gateway" placeholder="192.168.1.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="wifi-subnet">Subnet</label>
+                        <input type="text" id="wifi-subnet" name="subnet" placeholder="255.255.255.0">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">Save WiFi Settings</button>
+            </form>
+        </section>
+
+        <!-- MQTT Settings -->
+        <section class="card">
+            <h2>MQTT / Home Assistant</h2>
+            <form id="mqtt-form">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="mqtt-enabled" name="enabled">
+                        Enable MQTT
+                    </label>
+                </div>
+                <div id="mqtt-fields">
+                    <div class="form-group">
+                        <label for="mqtt-broker">Broker Address</label>
+                        <input type="text" id="mqtt-broker" name="broker" placeholder="192.168.1.10">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-port">Port</label>
+                        <input type="number" id="mqtt-port" name="port" value="1883">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-username">Username</label>
+                        <input type="text" id="mqtt-username" name="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-password">Password</label>
+                        <input type="password" id="mqtt-password" name="mqtt_password">
+                    </div>
+                    <div class="form-group">
+                        <label for="mqtt-topic">Base Topic</label>
+                        <input type="text" id="mqtt-topic" name="base_topic" value="iwetmyplants">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="mqtt-ha-discovery" name="ha_discovery_enabled" checked>
+                            Enable Home Assistant Auto-Discovery
+                        </label>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">Save MQTT Settings</button>
+            </form>
+        </section>
+
+        <!-- ESP-NOW Settings -->
+        <section class="card">
+            <h2>ESP-NOW</h2>
+            <form id="espnow-form">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="espnow-enabled" name="enabled">
+                        Enable ESP-NOW
+                    </label>
+                </div>
+                <div id="espnow-fields">
+                    <div class="form-group">
+                        <label for="espnow-hub-mac">Hub MAC Address</label>
+                        <input type="text" id="espnow-hub-mac" name="hub_mac" placeholder="AA:BB:CC:DD:EE:FF">
+                        <small>Leave empty to use broadcast</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="espnow-channel">WiFi Channel</label>
+                        <input type="number" id="espnow-channel" name="channel" min="1" max="13" value="1">
+                        <small>Must match your router's channel if WiFi is used</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="espnow-interval">Send Interval (seconds)</label>
+                        <input type="number" id="espnow-interval" name="send_interval_sec" min="10" max="3600" value="60">
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary">Save ESP-NOW Settings</button>
+            </form>
+        </section>
+
+        <!-- System -->
+        <section class="card">
+            <h2>System</h2>
+            <div class="system-info">
+                <p><strong>Firmware:</strong> <span id="sys-version">--</span></p>
+                <p><strong>Device ID:</strong> <span id="sys-device-id">--</span></p>
+                <p><strong>MAC Address:</strong> <span id="sys-mac">--</span></p>
+                <p><strong>Free Heap:</strong> <span id="sys-heap">--</span></p>
+            </div>
+            <div class="system-actions">
+                <button id="btn-reboot" class="btn-warning">Reboot Device</button>
+                <button id="btn-factory-reset" class="btn-danger">Factory Reset</button>
+            </div>
+        </section>
+
+        <!-- OTA Update -->
+        <section class="card">
+            <h2>Firmware Update</h2>
+            <form id="ota-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="ota-file">Firmware File (.bin)</label>
+                    <input type="file" id="ota-file" name="firmware" accept=".bin">
+                </div>
+                <div id="ota-progress" style="display:none;">
+                    <progress id="ota-progress-bar" value="0" max="100"></progress>
+                    <span id="ota-progress-text">0%</span>
+                </div>
+                <button type="submit" class="btn-primary">Upload Firmware</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        // Toggle static IP fields
+        document.getElementById('wifi-static').addEventListener('change', (e) => {
+            document.getElementById('static-ip-fields').style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        // Toggle MQTT fields
+        document.getElementById('mqtt-enabled').addEventListener('change', (e) => {
+            document.getElementById('mqtt-fields').style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        // Toggle ESP-NOW fields
+        document.getElementById('espnow-enabled').addEventListener('change', (e) => {
+            document.getElementById('espnow-fields').style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        // WiFi scan
+        document.getElementById('btn-scan').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-scan');
+            btn.disabled = true;
+            btn.textContent = 'Scanning...';
+
+            try {
+                const response = await fetch('/api/wifi/scan');
+                const networks = await response.json();
+
+                const container = document.getElementById('wifi-networks');
+                container.innerHTML = '';
+                container.style.display = 'block';
+
+                networks.forEach(network => {
+                    const div = document.createElement('div');
+                    div.className = 'network-item';
+                    div.innerHTML = `
+                        <span class="ssid">${network.ssid}</span>
+                        <span class="rssi">${network.rssi} dBm</span>
+                        <span class="security">${network.encrypted ? '🔒' : '🔓'}</span>
+                    `;
+                    div.addEventListener('click', () => {
+                        document.getElementById('wifi-ssid').value = network.ssid;
+                        container.style.display = 'none';
+                    });
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                alert('Failed to scan networks');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Scan';
+        });
+
+        // Load current config
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+
+                // Device
+                document.getElementById('device-name').value = config.identity?.device_name || '';
+
+                // WiFi
+                document.getElementById('wifi-ssid').value = config.wifi?.ssid || '';
+                document.getElementById('wifi-static').checked = config.wifi?.use_static_ip || false;
+                document.getElementById('wifi-ip').value = config.wifi?.static_ip || '';
+                document.getElementById('wifi-gateway').value = config.wifi?.gateway || '';
+                document.getElementById('wifi-subnet').value = config.wifi?.subnet || '';
+
+                // MQTT
+                document.getElementById('mqtt-enabled').checked = config.mqtt?.enabled || false;
+                document.getElementById('mqtt-broker').value = config.mqtt?.broker || '';
+                document.getElementById('mqtt-port').value = config.mqtt?.port || 1883;
+                document.getElementById('mqtt-username').value = config.mqtt?.username || '';
+                document.getElementById('mqtt-topic').value = config.mqtt?.base_topic || 'iwetmyplants';
+                document.getElementById('mqtt-ha-discovery').checked = config.mqtt?.ha_discovery_enabled !== false;
+
+                // ESP-NOW
+                document.getElementById('espnow-enabled').checked = config.espnow?.enabled || false;
+                document.getElementById('espnow-hub-mac').value = config.espnow?.hub_mac || '';
+                document.getElementById('espnow-channel').value = config.espnow?.channel || 1;
+                document.getElementById('espnow-interval').value = config.espnow?.send_interval_sec || 60;
+
+                // Trigger visibility updates
+                document.getElementById('wifi-static').dispatchEvent(new Event('change'));
+                document.getElementById('mqtt-enabled').dispatchEvent(new Event('change'));
+                document.getElementById('espnow-enabled').dispatchEvent(new Event('change'));
+
+            } catch (error) {
+                console.error('Failed to load config:', error);
+            }
+        }
+
+        // Load system info
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/api/system/info');
+                const info = await response.json();
+
+                document.getElementById('sys-version').textContent = info.firmware_version || '--';
+                document.getElementById('sys-device-id').textContent = info.device_id || '--';
+                document.getElementById('sys-mac').textContent = info.mac_address || '--';
+                document.getElementById('sys-heap').textContent = info.free_heap ? `${Math.round(info.free_heap / 1024)} KB` : '--';
+            } catch (error) {
+                console.error('Failed to load system info:', error);
+            }
+        }
+
+        // Form submissions
+        async function submitForm(formId, endpoint) {
+            const form = document.getElementById(formId);
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            // Handle checkboxes (they're missing when unchecked)
+            form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                data[cb.name] = cb.checked;
+            });
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    alert('Settings saved successfully');
+                } else {
+                    throw new Error('Save failed');
+                }
+            } catch (error) {
+                alert('Failed to save settings');
+            }
+        }
+
+        document.getElementById('device-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitForm('device-form', '/api/config/device');
+        });
+
+        document.getElementById('wifi-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitForm('wifi-form', '/api/config/wifi');
+        });
+
+        document.getElementById('mqtt-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitForm('mqtt-form', '/api/config/mqtt');
+        });
+
+        document.getElementById('espnow-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitForm('espnow-form', '/api/config/espnow');
+        });
+
+        // System actions
+        document.getElementById('btn-reboot').addEventListener('click', async () => {
+            if (confirm('Reboot the device?')) {
+                await fetch('/api/system/reboot', { method: 'POST' });
+                alert('Device is rebooting...');
+            }
+        });
+
+        document.getElementById('btn-factory-reset').addEventListener('click', async () => {
+            if (confirm('This will erase all settings. Are you sure?')) {
+                if (confirm('Really? All WiFi, MQTT, and calibration settings will be lost.')) {
+                    await fetch('/api/config/reset', { method: 'POST' });
+                    alert('Factory reset complete. Device will reboot.');
+                }
+            }
+        });
+
+        // OTA upload
+        document.getElementById('ota-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('ota-file');
+            if (!fileInput.files.length) {
+                alert('Please select a firmware file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('firmware', fileInput.files[0]);
+
+            document.getElementById('ota-progress').style.display = 'block';
+
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/system/ota');
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        document.getElementById('ota-progress-bar').value = percent;
+                        document.getElementById('ota-progress-text').textContent = percent + '%';
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status === 200) {
+                        alert('Firmware uploaded successfully. Device will reboot.');
+                    } else {
+                        alert('Upload failed: ' + xhr.statusText);
+                    }
+                };
+
+                xhr.onerror = () => alert('Upload failed');
+                xhr.send(formData);
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+            }
+        });
+
+        // Initialize
+        loadConfig();
+        loadSystemInfo();
+    </script>
+</body>
+</html>

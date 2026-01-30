@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calibration - iWetMyPlants</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Sensor Calibration</h1>
+        <a href="/" class="back-link">Back to Dashboard</a>
+    </header>
+
+    <main>
+        <section class="card">
+            <h2>Select Sensor</h2>
+            <select id="sensor-select">
+                <!-- Populated by JavaScript -->
+            </select>
+        </section>
+
+        <section class="card" id="calibration-panel">
+            <h2>Calibration</h2>
+
+            <div class="live-reading">
+                <div class="reading-display">
+                    <span class="label">Current Raw Value</span>
+                    <span class="value" id="raw-value">--</span>
+                </div>
+                <div class="reading-display">
+                    <span class="label">Average</span>
+                    <span class="value" id="avg-value">--</span>
+                </div>
+                <div class="reading-display">
+                    <span class="label">Current %</span>
+                    <span class="value" id="percent-value">--</span>
+                </div>
+            </div>
+
+            <div class="calibration-graph">
+                <canvas id="reading-graph" width="400" height="150"></canvas>
+            </div>
+
+            <div class="calibration-points">
+                <div class="cal-point">
+                    <h3>Dry Point (Air)</h3>
+                    <p>Hold sensor in air, away from moisture</p>
+                    <span class="saved-value">Saved: <span id="dry-saved">--</span></span>
+                    <button id="btn-set-dry" class="btn-primary">Set Dry Point</button>
+                </div>
+
+                <div class="cal-point">
+                    <h3>Wet Point (Water)</h3>
+                    <p>Submerge sensor in water up to the line</p>
+                    <span class="saved-value">Saved: <span id="wet-saved">--</span></span>
+                    <button id="btn-set-wet" class="btn-primary">Set Wet Point</button>
+                </div>
+            </div>
+
+            <div class="calibration-actions">
+                <button id="btn-save" class="btn-success" disabled>Save Calibration</button>
+                <button id="btn-reset" class="btn-danger">Reset to Defaults</button>
+            </div>
+
+            <div id="calibration-status" class="status-message"></div>
+        </section>
+
+        <section class="card">
+            <h2>Calibration Tips</h2>
+            <ul>
+                <li>Ensure the sensor is completely dry before setting the dry point</li>
+                <li>Wait for the reading to stabilize (5-10 seconds) before capturing</li>
+                <li>For wet point, submerge only up to the marked line on the sensor</li>
+                <li>The dry value should be higher than the wet value</li>
+                <li>Typical dry values: 2500-3500, wet values: 1000-1800</li>
+            </ul>
+        </section>
+    </main>
+
+    <script>
+        let ws = null;
+        let dryValue = null;
+        let wetValue = null;
+        const graphData = [];
+        const maxGraphPoints = 100;
+
+        // Initialize WebSocket for rapid readings
+        function connectWebSocket() {
+            const sensorIndex = document.getElementById('sensor-select').value;
+            if (ws) ws.close();
+
+            ws = new WebSocket(`ws://${window.location.host}/ws/calibration?sensor=${sensorIndex}`);
+
+            ws.onopen = () => {
+                document.getElementById('calibration-status').textContent = 'Connected - Live readings active';
+                document.getElementById('calibration-status').className = 'status-message success';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'reading') {
+                    updateReading(data);
+                } else if (data.type === 'calibration') {
+                    document.getElementById('dry-saved').textContent = data.dry || '--';
+                    document.getElementById('wet-saved').textContent = data.wet || '--';
+                }
+            };
+
+            ws.onclose = () => {
+                document.getElementById('calibration-status').textContent = 'Disconnected';
+                document.getElementById('calibration-status').className = 'status-message error';
+            };
+
+            ws.onerror = () => {
+                document.getElementById('calibration-status').textContent = 'Connection error';
+                document.getElementById('calibration-status').className = 'status-message error';
+            };
+        }
+
+        function updateReading(data) {
+            document.getElementById('raw-value').textContent = data.raw;
+            document.getElementById('avg-value').textContent = data.avg;
+            document.getElementById('percent-value').textContent = data.percent + '%';
+
+            // Update graph
+            graphData.push(data.raw);
+            if (graphData.length > maxGraphPoints) graphData.shift();
+            drawGraph();
+        }
+
+        function drawGraph() {
+            const canvas = document.getElementById('reading-graph');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            if (graphData.length < 2) return;
+
+            const min = Math.min(...graphData) - 100;
+            const max = Math.max(...graphData) + 100;
+            const range = max - min || 1;
+
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            graphData.forEach((value, index) => {
+                const x = (index / maxGraphPoints) * width;
+                const y = height - ((value - min) / range) * height;
+                if (index === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+
+            ctx.stroke();
+        }
+
+        // Button handlers
+        document.getElementById('btn-set-dry').addEventListener('click', () => {
+            const avg = document.getElementById('avg-value').textContent;
+            if (avg !== '--') {
+                dryValue = parseInt(avg);
+                document.getElementById('dry-saved').textContent = dryValue;
+                checkCanSave();
+                ws.send(JSON.stringify({ type: 'set_dry' }));
+            }
+        });
+
+        document.getElementById('btn-set-wet').addEventListener('click', () => {
+            const avg = document.getElementById('avg-value').textContent;
+            if (avg !== '--') {
+                wetValue = parseInt(avg);
+                document.getElementById('wet-saved').textContent = wetValue;
+                checkCanSave();
+                ws.send(JSON.stringify({ type: 'set_wet' }));
+            }
+        });
+
+        document.getElementById('btn-save').addEventListener('click', () => {
+            ws.send(JSON.stringify({ type: 'save' }));
+            document.getElementById('calibration-status').textContent = 'Calibration saved!';
+            document.getElementById('calibration-status').className = 'status-message success';
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            if (confirm('Reset calibration to factory defaults?')) {
+                ws.send(JSON.stringify({ type: 'reset' }));
+                dryValue = null;
+                wetValue = null;
+                checkCanSave();
+            }
+        });
+
+        document.getElementById('sensor-select').addEventListener('change', connectWebSocket);
+
+        function checkCanSave() {
+            const canSave = dryValue !== null && wetValue !== null && dryValue > wetValue;
+            document.getElementById('btn-save').disabled = !canSave;
+        }
+
+        // Load sensors on page load
+        async function loadSensors() {
+            try {
+                const response = await fetch('/api/sensors');
+                const sensors = await response.json();
+                const select = document.getElementById('sensor-select');
+
+                sensors.forEach((sensor, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = sensor.name || `Sensor ${index + 1}`;
+                    select.appendChild(option);
+                });
+
+                if (sensors.length > 0) {
+                    connectWebSocket();
+                }
+            } catch (error) {
+                console.error('Failed to load sensors:', error);
+            }
+        }
+
+        loadSensors();
+    </script>
+</body>
+</html>

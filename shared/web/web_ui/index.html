@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iWetMyPlants</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>iWetMyPlants</h1>
+        <span id="device-name">Loading...</span>
+    </header>
+
+    <nav>
+        <a href="/" class="active">Dashboard</a>
+        <a href="/sensors">Sensors</a>
+        <a href="/settings">Settings</a>
+        <!-- Hub only -->
+        <a href="/devices" id="nav-devices" style="display:none;">Devices</a>
+        <!-- Greenhouse only -->
+        <a href="/relays" id="nav-relays" style="display:none;">Relays</a>
+        <a href="/automation" id="nav-automation" style="display:none;">Automation</a>
+    </nav>
+
+    <main>
+        <section id="status-cards">
+            <div class="card" id="moisture-card">
+                <h2>Moisture</h2>
+                <div class="sensor-readings" id="moisture-readings">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="card" id="environment-card">
+                <h2>Environment</h2>
+                <div class="reading">
+                    <span class="label">Temperature</span>
+                    <span class="value" id="temperature">--</span>
+                    <span class="unit">°C</span>
+                </div>
+                <div class="reading">
+                    <span class="label">Humidity</span>
+                    <span class="value" id="humidity">--</span>
+                    <span class="unit">%</span>
+                </div>
+            </div>
+
+            <div class="card" id="system-card">
+                <h2>System</h2>
+                <div class="reading">
+                    <span class="label">WiFi</span>
+                    <span class="value" id="wifi-rssi">--</span>
+                    <span class="unit">dBm</span>
+                </div>
+                <div class="reading">
+                    <span class="label">Uptime</span>
+                    <span class="value" id="uptime">--</span>
+                </div>
+                <div class="reading" id="battery-row" style="display:none;">
+                    <span class="label">Battery</span>
+                    <span class="value" id="battery">--</span>
+                    <span class="unit">%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Relay controls (Greenhouse only) -->
+        <section id="relay-controls" style="display:none;">
+            <h2>Relay Controls</h2>
+            <div id="relay-buttons">
+                <!-- Populated by JavaScript -->
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <span>iWetMyPlants v<span id="version">2.0.0</span></span>
+        <span id="connection-status">Connecting...</span>
+    </footer>
+
+    <script>
+        // Device type detection and UI initialization
+        const deviceType = parseInt('{{DEVICE_TYPE}}') || 0;
+
+        // Show device-specific navigation
+        if (deviceType === 0) { // Hub
+            document.getElementById('nav-devices').style.display = 'inline';
+        } else if (deviceType === 2) { // Greenhouse
+            document.getElementById('nav-relays').style.display = 'inline';
+            document.getElementById('nav-automation').style.display = 'inline';
+            document.getElementById('relay-controls').style.display = 'block';
+        } else if (deviceType === 1) { // Remote
+            document.getElementById('battery-row').style.display = 'flex';
+        }
+
+        // Fetch and update status periodically
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                document.getElementById('device-name').textContent = data.device_name || 'iWetMyPlants';
+                document.getElementById('wifi-rssi').textContent = data.wifi_rssi || '--';
+                document.getElementById('uptime').textContent = formatUptime(data.uptime_sec);
+                document.getElementById('temperature').textContent = data.temperature?.toFixed(1) || '--';
+                document.getElementById('humidity').textContent = data.humidity?.toFixed(1) || '--';
+
+                if (data.battery_percent !== undefined) {
+                    document.getElementById('battery').textContent = data.battery_percent;
+                }
+
+                updateMoistureReadings(data.moisture || []);
+                document.getElementById('connection-status').textContent = 'Connected';
+            } catch (error) {
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                console.error('Failed to fetch status:', error);
+            }
+        }
+
+        function updateMoistureReadings(readings) {
+            const container = document.getElementById('moisture-readings');
+            container.innerHTML = '';
+
+            readings.forEach((reading, index) => {
+                const div = document.createElement('div');
+                div.className = 'reading';
+                div.innerHTML = `
+                    <span class="label">${reading.name || 'Sensor ' + (index + 1)}</span>
+                    <span class="value">${reading.percent}</span>
+                    <span class="unit">%</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function formatUptime(seconds) {
+            if (!seconds) return '--';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${mins}m`;
+        }
+
+        // Initial update and periodic refresh
+        updateStatus();
+        setInterval(updateStatus, 5000);
+    </script>
+</body>
+</html>
