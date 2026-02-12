@@ -368,9 +368,9 @@ private:
     PendingAck* findPendingAck(const uint8_t* mac, uint8_t sequence);
     void removePendingAck(const uint8_t* mac, uint8_t sequence);
 
-    // Static callbacks for ESP-NOW
+    // Static callbacks for ESP-NOW (using legacy API signature for compatibility)
     static void onDataSentStatic(const uint8_t* mac, esp_now_send_status_t status);
-    static void onDataRecvStatic(const esp_now_recv_info_t* info, const uint8_t* data, int len);
+    static void onDataRecvStatic(const uint8_t* mac, const uint8_t* data, int len);
 
     // Instance callbacks
     void onDataSent(const uint8_t* mac, esp_now_send_status_t status);

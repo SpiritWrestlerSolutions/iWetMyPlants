@@ -31,8 +31,22 @@ void Ads1115Input::begin() {
 
     // Initialize shared instance if not already done
     if (!s_adc_initialized[instance_idx]) {
-        if (!s_adc_instances[instance_idx].begin(_address)) {
-            Serial.printf("[ADS1115] Failed to initialize at 0x%02X\n", _address);
+        // Manual I2C probe first — catches address conflicts and wiring
+        // issues before the Adafruit library tries (and potentially
+        // re-calls Wire.begin(), which on ESP32 Arduino 3.x can
+        // tear down and reinitialize the I2C peripheral).
+        Wire.beginTransmission(_address);
+        uint8_t i2c_err = Wire.endTransmission();
+        if (i2c_err != 0) {
+            Serial.printf("[ADS1115] No device at 0x%02X (I2C err=%d). "
+                          "Check wiring and ADDR pin.\n", _address, i2c_err);
+            return;
+        }
+        Serial.printf("[ADS1115] Device detected at 0x%02X, initializing driver...\n", _address);
+
+        // Pass &Wire explicitly to avoid any default-argument ambiguity
+        if (!s_adc_instances[instance_idx].begin(_address, &Wire)) {
+            Serial.printf("[ADS1115] Adafruit driver init failed at 0x%02X\n", _address);
             return;
         }
         s_adc_initialized[instance_idx] = true;
@@ -111,7 +125,7 @@ int16_t Ads1115Input::readDifferential(uint8_t pos_channel, uint8_t neg_channel)
     return 0;
 }
 
-bool Ads1115Input::isConnected() {
+bool Ads1115Input::isConnected() const {
     if (!_adc) {
         return false;
     }

@@ -153,7 +153,7 @@ public:
     /**
      * @brief Check if ADC chip is responding
      */
-    bool isConnected();
+    bool isConnected() const override;
 
     /**
      * @brief Get shared ADS1115 instance for address

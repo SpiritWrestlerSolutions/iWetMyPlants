@@ -54,6 +54,12 @@ public:
      * @return Human-readable type name
      */
     virtual const char* getTypeName() const = 0;
+
+    /**
+     * @brief Check if hardware is connected and responding
+     * @return true if hardware is present (always true for direct ADC)
+     */
+    virtual bool isConnected() const { return true; }
 };
 
 /**
@@ -182,6 +188,16 @@ public:
      * @brief Get configuration
      */
     const MoistureSensorConfig& getConfig() const { return _config; }
+
+    /**
+     * @brief Get input type name
+     */
+    const char* getInputTypeName() const { return _input ? _input->getTypeName() : "None"; }
+
+    /**
+     * @brief Check if hardware is connected
+     */
+    bool isHardwareConnected() const { return _input ? _input->isConnected() : false; }
 
     /**
      * @brief Update configuration

@@ -4,7 +4,7 @@
  */
 
 #include "config_manager.h"
-#include <WiFi.h>
+#include <esp_mac.h>
 #include <esp_crc.h>
 
 namespace iwmp {
@@ -436,7 +436,7 @@ void ConfigManager::printConfig() const {
 
 void ConfigManager::generateDeviceId() {
     uint8_t mac[6];
-    WiFi.macAddress(mac);
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
 
     // Format as 12-char hex string (lowercase)
     snprintf(_config.identity.device_id, sizeof(_config.identity.device_id),

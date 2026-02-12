@@ -12,7 +12,7 @@
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <functional>
-#include "config_schema.h"
+#include "../config/config_schema.h"
 
 namespace iwmp {
 

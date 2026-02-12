@@ -34,6 +34,28 @@ class WebServer;
 using SensorDataCallback = std::function<bool(uint8_t index, uint16_t& raw, uint8_t& percent)>;
 
 /**
+ * @brief Extended sensor status info
+ */
+struct SensorStatusInfo {
+    bool exists;            // Sensor object exists
+    bool ready;             // Sensor is ready to read
+    bool hw_connected;      // Hardware is connected (I2C device responding, etc.)
+    const char* input_type; // Input type name ("ADS1115", "DirectADC", etc.)
+    uint8_t ads_channel;    // ADS1115 channel (0-3), only valid for ADS1115
+    uint8_t ads_address;    // ADS1115 I2C address, only valid for ADS1115
+};
+
+/**
+ * @brief Sensor status provider callback
+ *
+ * Called when API needs extended sensor status.
+ * @param index Sensor index (0-based)
+ * @param status Output: sensor status info
+ * @return true if status was populated
+ */
+using SensorStatusCallback = std::function<bool(uint8_t index, SensorStatusInfo& status)>;
+
+/**
  * @brief Relay state provider callback
  *
  * Called when API needs current relay states.
@@ -44,24 +66,24 @@ using SensorDataCallback = std::function<bool(uint8_t index, uint16_t& raw, uint
 using RelayStateCallback = std::function<bool(uint8_t index, bool& state)>;
 
 /**
- * @brief Relay control callback
+ * @brief Relay control callback for API
  *
  * Called when API receives relay control command.
  * @param index Relay index (0-based)
  * @param state Desired state (true = on)
  * @return true if command was executed
  */
-using RelayControlCallback = std::function<bool(uint8_t index, bool state)>;
+using ApiRelayControlCallback = std::function<bool(uint8_t index, bool state)>;
 
 /**
- * @brief Calibration action callback
+ * @brief Calibration action callback for API
  *
  * Called when API receives calibration command.
  * @param sensor_index Sensor to calibrate
  * @param action "dry" or "wet"
  * @return true if calibration was performed
  */
-using CalibrationCallback = std::function<bool(uint8_t sensor_index, const char* action)>;
+using ApiCalibrationCallback = std::function<bool(uint8_t sensor_index, const char* action)>;
 
 /**
  * @brief Paired device info for Hub
@@ -73,6 +95,11 @@ struct PairedDeviceInfo {
     int8_t rssi;
     uint32_t last_seen;     // millis() of last message
     bool online;
+    // Cached sensor readings
+    uint8_t moisture_percent;
+    float temperature;
+    float humidity;
+    uint8_t battery_percent;
 };
 
 /**
@@ -102,6 +129,11 @@ public:
     static void onSensorData(SensorDataCallback callback);
 
     /**
+     * @brief Set sensor status provider
+     */
+    static void onSensorStatus(SensorStatusCallback callback);
+
+    /**
      * @brief Set relay state provider
      */
     static void onRelayState(RelayStateCallback callback);
@@ -109,12 +141,12 @@ public:
     /**
      * @brief Set relay control handler
      */
-    static void onRelayControl(RelayControlCallback callback);
+    static void onRelayControl(ApiRelayControlCallback callback);
 
     /**
      * @brief Set calibration handler
      */
-    static void onCalibration(CalibrationCallback callback);
+    static void onCalibration(ApiCalibrationCallback callback);
 
     /**
      * @brief Set paired devices provider (Hub only)
@@ -141,9 +173,10 @@ public:
 private:
     // Callback storage
     static SensorDataCallback s_sensor_callback;
+    static SensorStatusCallback s_sensor_status_callback;
     static RelayStateCallback s_relay_state_callback;
-    static RelayControlCallback s_relay_control_callback;
-    static CalibrationCallback s_calibration_callback;
+    static ApiRelayControlCallback s_relay_control_callback;
+    static ApiCalibrationCallback s_calibration_callback;
     static PairedDevicesCallback s_paired_devices_callback;
 
     // ============ Endpoint Handlers ============

@@ -68,6 +68,12 @@ public:
     bool isRunning() const { return _running; }
 
     /**
+     * @brief Periodic update (call from main loop)
+     * Handles OTA reboot checks and other periodic tasks
+     */
+    void update();
+
+    /**
      * @brief Get underlying AsyncWebServer
      */
     AsyncWebServer* getServer() { return _server; }

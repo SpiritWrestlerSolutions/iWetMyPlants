@@ -9,6 +9,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <memory>
 #include "device_registry.h"
 #include "espnow_manager.h"
 #include "mqtt_manager.h"
@@ -127,7 +128,7 @@ private:
     DeviceRegistry _registry;
 
     // Local sensors (optional hub-attached sensors)
-    MoistureSensor* _local_sensors[IWMP_MAX_SENSORS] = {nullptr};
+    std::unique_ptr<MoistureSensor> _local_sensors[IWMP_MAX_SENSORS];
     uint8_t _local_sensor_count = 0;
 
     // Timing
@@ -152,9 +153,20 @@ private:
     // ============ Internal Methods ============
 
     /**
+     * @brief Initialize local sensors attached to hub
+     */
+    void initializeLocalSensors();
+
+    /**
      * @brief Process local sensors
      */
     void processLocalSensors();
+
+    /**
+     * @brief Select sensor for calibration
+     * @param index Sensor index
+     */
+    void selectSensorForCalibration(uint8_t index);
 
     /**
      * @brief Check device timeouts

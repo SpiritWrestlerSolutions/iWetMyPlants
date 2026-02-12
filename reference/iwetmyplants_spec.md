@@ -1440,4 +1440,3 @@ automation:
 
 *Document Version: 1.0*
 *Last Updated: January 2025*
-*Author: Claude (with Brendan's requirements)*

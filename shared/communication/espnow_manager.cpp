@@ -5,6 +5,7 @@
 
 #include "espnow_manager.h"
 #include <esp_wifi.h>
+#include <esp_mac.h>
 
 namespace iwmp {
 
@@ -27,14 +28,29 @@ bool EspNowManager::begin(uint8_t channel) {
     s_instance = this;
     _channel = channel;
 
-    // Get own MAC address
-    WiFi.macAddress(_own_mac);
+    // Get own MAC address (efuse read — safe before WiFi start)
+    esp_read_mac(_own_mac, ESP_MAC_WIFI_STA);
 
-    // Initialize WiFi in station mode (required for ESP-NOW)
-    WiFi.mode(WIFI_STA);
+    // Ensure WiFi has STA enabled (required for ESP-NOW) without
+    // disrupting AP mode if it's already running
+    wifi_mode_t current_mode;
+    if (esp_wifi_get_mode(&current_mode) != ESP_OK) {
+        current_mode = WIFI_MODE_NULL;
+    }
+    if (current_mode == WIFI_MODE_AP) {
+        WiFi.mode(WIFI_AP_STA);
+    } else if (current_mode == WIFI_MODE_NULL || current_mode == WIFI_MODE_MAX) {
+        WiFi.mode(WIFI_STA);
+    }
+    // If already STA or AP_STA, leave as-is
 
-    // Set channel
-    esp_wifi_set_channel(_channel, WIFI_SECOND_CHAN_NONE);
+    // Only force the channel when WiFi STA is NOT connected to an AP.
+    // When STA is connected, the AP manages the channel and calling
+    // esp_wifi_set_channel() can silently corrupt the TCP/IP stack
+    // (especially on ESP32-C3), making the web server unreachable.
+    if (!WiFi.isConnected()) {
+        esp_wifi_set_channel(_channel, WIFI_SECOND_CHAN_NONE);
+    }
 
     // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
@@ -87,18 +103,14 @@ bool EspNowManager::send(const uint8_t* peer_mac, const uint8_t* data, size_t le
         return false;
     }
 
-    // Ensure peer exists (add temporarily if not)
-    bool temp_peer = false;
+    // Ensure peer exists - add if missing (kept until explicitly removed
+    // or clearAllPeers is called; removing immediately after esp_now_send
+    // races with the async send completion)
     if (!peerExists(peer_mac) && !compareMac(peer_mac, BROADCAST_MAC)) {
         addPeer(peer_mac, _channel, false);
-        temp_peer = true;
     }
 
     esp_err_t result = esp_now_send(peer_mac, data, len);
-
-    if (temp_peer) {
-        removePeer(peer_mac);
-    }
 
     if (result == ESP_OK) {
         _stats.packets_sent++;
@@ -199,7 +211,7 @@ bool EspNowManager::sendWithRetry(const uint8_t* peer_mac, const uint8_t* data, 
                       attempt + 1, max_retries, mutable_header->sequence_number);
     }
 
-    _stats.packets_lost++;
+    // packets_lost already incremented by sendWithAck/send per attempt
     return false;
 }
 
@@ -246,7 +258,8 @@ bool EspNowManager::sendBatteryStatus(const uint8_t* peer_mac, uint16_t voltage_
     msg.charging = charging ? 1 : 0;
     msg.low_battery = (voltage_mv < 3300) ? 1 : 0;
 
-    return sendWithRetry(peer_mac, (uint8_t*)&msg, sizeof(msg));
+    // Battery status is informational - single send, no blocking retry
+    return send(peer_mac, (uint8_t*)&msg, sizeof(msg));
 }
 
 bool EspNowManager::sendRelayCommand(const uint8_t* peer_mac, uint8_t relay_index,
@@ -362,7 +375,9 @@ bool EspNowManager::addPeer(const uint8_t* mac, uint8_t channel, bool encrypt,
     esp_now_peer_info_t peer_info;
     memset(&peer_info, 0, sizeof(peer_info));
     copyMac(peer_info.peer_addr, mac);
-    peer_info.channel = channel ? channel : _channel;
+    // Channel 0 = use the current interface channel (avoids mismatch when
+    // the router assigns a channel different from the configured default).
+    peer_info.channel = 0;
     peer_info.encrypt = encrypt;
 
     if (encrypt && lmk) {
@@ -549,9 +564,9 @@ void EspNowManager::onDataSentStatic(const uint8_t* mac, esp_now_send_status_t s
     }
 }
 
-void EspNowManager::onDataRecvStatic(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
-    if (s_instance && info) {
-        s_instance->onDataRecv(info->src_addr, data, len);
+void EspNowManager::onDataRecvStatic(const uint8_t* mac, const uint8_t* data, int len) {
+    if (s_instance && mac) {
+        s_instance->onDataRecv(mac, data, len);
     }
 }
 

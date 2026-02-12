@@ -66,10 +66,19 @@ constexpr uint16_t ESPNOW_SEND_INTERVAL_SEC = 300;  // 5 minutes
 
 // Sensor defaults
 constexpr uint8_t ADS1115_DEFAULT_ADDRESS = 0x48;
-constexpr uint16_t MOISTURE_DRY_VALUE = 3500;       // Typical dry ADC value
-constexpr uint16_t MOISTURE_WET_VALUE = 1500;       // Typical wet ADC value
+
+// Direct ADC calibration (ESP32 12-bit ADC, 0-4095 range)
+constexpr uint16_t MOISTURE_DRY_VALUE = 3500;       // Typical dry ADC value (12-bit)
+constexpr uint16_t MOISTURE_WET_VALUE = 1500;       // Typical wet ADC value (12-bit)
+
+// ADS1115 calibration (16-bit scaled to 0-65535 range)
+// Note: ADS1115 raw values are multiplied by 2 for full 16-bit range
+constexpr uint16_t ADS1115_DRY_VALUE = 45000;       // Typical dry ADC value (ADS1115)
+constexpr uint16_t ADS1115_WET_VALUE = 18000;       // Typical wet ADC value (ADS1115)
+
 constexpr uint8_t READING_SAMPLES = 10;
 constexpr uint16_t SAMPLE_DELAY_MS = 10;
+constexpr uint8_t MOISTURE_WARNING_LEVEL = 30;  // Warn below 30% moisture
 
 // Environmental sensor defaults
 constexpr uint8_t SHT_DEFAULT_ADDRESS = 0x44;
@@ -167,6 +176,7 @@ inline void initDefaultMoistureSensor(MoistureSensorConfig& sensor, uint8_t inde
     sensor.reading_samples = defaults::READING_SAMPLES;
     sensor.sample_delay_ms = defaults::SAMPLE_DELAY_MS;
     snprintf(sensor.sensor_name, sizeof(sensor.sensor_name), "Plant %d", index + 1);
+    sensor.warning_level = defaults::MOISTURE_WARNING_LEVEL;
 }
 
 /**
@@ -247,8 +257,18 @@ inline void initDefaultConfig(DeviceConfig& config, DeviceType type) {
     // Initialize sensors based on device type
     switch (type) {
         case DeviceType::HUB:
-            for (uint8_t i = 0; i < IWMP_MAX_SENSORS && i < 8; i++) {
-                initDefaultMoistureSensor(config.moisture_sensors[i], i, hub_pins::ADC_PINS[i]);
+            for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+                uint8_t pin = (i < 8) ? hub_pins::ADC_PINS[i] : 0;
+                initDefaultMoistureSensor(config.moisture_sensors[i], i, pin);
+                // Sensors 8+ default to ADS1115 since Hub only has 8 ADC pins
+                // 8-11 → ADS 0x48 ch0-3, 12-15 → ADS 0x49 ch0-3
+                if (i >= 8) {
+                    config.moisture_sensors[i].input_type = SensorInputType::ADS1115;
+                    config.moisture_sensors[i].ads_channel = (i - 8) % 4;
+                    config.moisture_sensors[i].ads_i2c_address = 0x48 + ((i - 8) / 4);
+                    config.moisture_sensors[i].dry_value = defaults::ADS1115_DRY_VALUE;
+                    config.moisture_sensors[i].wet_value = defaults::ADS1115_WET_VALUE;
+                }
             }
             initDefaultEnvSensor(config.env_sensor, hub_pins::STATUS_LED);  // No DHT by default
             config.espnow.enabled = true;  // Hub receives ESP-NOW
@@ -259,8 +279,8 @@ inline void initDefaultConfig(DeviceConfig& config, DeviceType type) {
             initDefaultMoistureSensor(config.moisture_sensors[0], 0, remote_pins::ADC_PIN);
             initDefaultEnvSensor(config.env_sensor, 0);
             initDefaultPower(config.power);
-            config.espnow.enabled = true;  // Remote sends via ESP-NOW
-            config.power.battery_powered = true;
+            config.espnow.enabled = false;  // Remote uses WiFi, not ESP-NOW
+            config.power.battery_powered = false;  // Default to powered mode; enable battery in config
             break;
 
         case DeviceType::GREENHOUSE:

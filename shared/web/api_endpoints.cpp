@@ -5,17 +5,21 @@
 
 #include "api_endpoints.h"
 #include "../config/config_manager.h"
+#include "../utils/ota_manager.h"
+#include "../utils/error_tracker.h"
 #include <WiFi.h>
 #include <esp_system.h>
 #include <esp_chip_info.h>
+#include <esp_mac.h>
 
 namespace iwmp {
 
 // Static callback storage
 SensorDataCallback ApiEndpoints::s_sensor_callback = nullptr;
+SensorStatusCallback ApiEndpoints::s_sensor_status_callback = nullptr;
 RelayStateCallback ApiEndpoints::s_relay_state_callback = nullptr;
-RelayControlCallback ApiEndpoints::s_relay_control_callback = nullptr;
-CalibrationCallback ApiEndpoints::s_calibration_callback = nullptr;
+ApiRelayControlCallback ApiEndpoints::s_relay_control_callback = nullptr;
+ApiCalibrationCallback ApiEndpoints::s_calibration_callback = nullptr;
 PairedDevicesCallback ApiEndpoints::s_paired_devices_callback = nullptr;
 
 // ============ Callback Registration ============
@@ -24,15 +28,19 @@ void ApiEndpoints::onSensorData(SensorDataCallback callback) {
     s_sensor_callback = callback;
 }
 
+void ApiEndpoints::onSensorStatus(SensorStatusCallback callback) {
+    s_sensor_status_callback = callback;
+}
+
 void ApiEndpoints::onRelayState(RelayStateCallback callback) {
     s_relay_state_callback = callback;
 }
 
-void ApiEndpoints::onRelayControl(RelayControlCallback callback) {
+void ApiEndpoints::onRelayControl(ApiRelayControlCallback callback) {
     s_relay_control_callback = callback;
 }
 
-void ApiEndpoints::onCalibration(CalibrationCallback callback) {
+void ApiEndpoints::onCalibration(ApiCalibrationCallback callback) {
     s_calibration_callback = callback;
 }
 
@@ -67,50 +75,206 @@ void ApiEndpoints::sendJson(AsyncWebServerRequest* request, JsonDocument& doc, i
 // ============ Route Registration ============
 
 void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
+    Serial.println("[API] Registering API routes...");
+
     // Status & System
     server.on("/api/status", HTTP_GET, handleGetStatus);
     server.on("/api/system/info", HTTP_GET, handleGetSystemInfo);
     server.on("/api/system/reboot", HTTP_POST, handlePostReboot);
 
+    // OTA Progress endpoint
+    server.on("/api/system/ota/progress", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        const auto& progress = Ota.getProgress();
+
+        doc["state"] = static_cast<int>(progress.state);
+        doc["state_name"] = progress.state == OtaState::IDLE ? "idle" :
+                           progress.state == OtaState::RECEIVING ? "receiving" :
+                           progress.state == OtaState::VERIFYING ? "verifying" :
+                           progress.state == OtaState::COMPLETE ? "complete" : "error";
+        doc["total_size"] = progress.total_size;
+        doc["received"] = progress.received;
+        doc["percent"] = progress.percent;
+
+        if (progress.state == OtaState::ERROR) {
+            doc["error"] = progress.error_message;
+        }
+
+        sendJson(request, doc);
+    });
+
+    // Error history endpoint
+    server.on("/api/system/errors", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+
+        doc["total_errors"] = Errors.totalErrors();
+        doc["recent_count"] = Errors.count();
+        doc["has_critical"] = Errors.hasCriticalErrors();
+        doc["time_since_last_ms"] = Errors.timeSinceLastError();
+
+        JsonArray errors = doc["errors"].to<JsonArray>();
+        for (size_t i = 0; i < Errors.count(); i++) {
+            const ErrorRecord* rec = Errors.getRecord(i);
+            if (rec) {
+                JsonObject err = errors.add<JsonObject>();
+                err["code"] = static_cast<int>(rec->code);
+                err["severity"] = static_cast<int>(rec->severity);
+                err["message"] = getErrorMessage(rec->code);
+                err["context"] = rec->context;
+                err["line"] = rec->line;
+                err["timestamp_ms"] = rec->timestamp;
+            }
+        }
+
+        sendJson(request, doc);
+    });
+
+    // Clear errors endpoint
+    server.on("/api/system/errors/clear", HTTP_POST, [](AsyncWebServerRequest* request) {
+        Errors.clear();
+        sendSuccess(request, "Error history cleared");
+    });
+
     // Sensors
     server.on("/api/sensors", HTTP_GET, handleGetSensors);
 
-    // Sensor by index (with calibration)
-    server.on("^\\/api\\/sensors\\/(\\d+)$", HTTP_GET, [](AsyncWebServerRequest* request) {
-        uint8_t index = request->pathArg(0).toInt();
-        handleGetSensor(request, index);
-    });
+    // Sensor by index - explicit routes for 0-15
+    static const char* sensor_paths[] = {
+        "/api/sensors/0", "/api/sensors/1", "/api/sensors/2", "/api/sensors/3",
+        "/api/sensors/4", "/api/sensors/5", "/api/sensors/6", "/api/sensors/7",
+        "/api/sensors/8", "/api/sensors/9", "/api/sensors/10", "/api/sensors/11",
+        "/api/sensors/12", "/api/sensors/13", "/api/sensors/14", "/api/sensors/15"
+    };
+    for (int i = 0; i < 16; i++) {
+        server.on(sensor_paths[i], HTTP_GET, [](AsyncWebServerRequest* request) {
+            String url = request->url();
+            uint8_t idx = url.substring(url.lastIndexOf('/') + 1).toInt();
+            handleGetSensor(request, idx);
+        });
+    }
 
-    server.on("^\\/api\\/sensors\\/(\\d+)\\/calibrate$", HTTP_POST,
-        [](AsyncWebServerRequest* request) {
-            // Body handler is separate
-        },
-        nullptr,
-        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            uint8_t sensor_idx = request->pathArg(0).toInt();
-            handlePostCalibrate(request, sensor_idx);
-        }
-    );
+    // Calibration endpoints - explicit routes for sensors 0-15, dry/wet actions
+    static const char* cal_dry_paths[] = {
+        "/api/sensors/0/calibrate/dry", "/api/sensors/1/calibrate/dry",
+        "/api/sensors/2/calibrate/dry", "/api/sensors/3/calibrate/dry",
+        "/api/sensors/4/calibrate/dry", "/api/sensors/5/calibrate/dry",
+        "/api/sensors/6/calibrate/dry", "/api/sensors/7/calibrate/dry",
+        "/api/sensors/8/calibrate/dry", "/api/sensors/9/calibrate/dry",
+        "/api/sensors/10/calibrate/dry", "/api/sensors/11/calibrate/dry",
+        "/api/sensors/12/calibrate/dry", "/api/sensors/13/calibrate/dry",
+        "/api/sensors/14/calibrate/dry", "/api/sensors/15/calibrate/dry"
+    };
+    static const char* cal_wet_paths[] = {
+        "/api/sensors/0/calibrate/wet", "/api/sensors/1/calibrate/wet",
+        "/api/sensors/2/calibrate/wet", "/api/sensors/3/calibrate/wet",
+        "/api/sensors/4/calibrate/wet", "/api/sensors/5/calibrate/wet",
+        "/api/sensors/6/calibrate/wet", "/api/sensors/7/calibrate/wet",
+        "/api/sensors/8/calibrate/wet", "/api/sensors/9/calibrate/wet",
+        "/api/sensors/10/calibrate/wet", "/api/sensors/11/calibrate/wet",
+        "/api/sensors/12/calibrate/wet", "/api/sensors/13/calibrate/wet",
+        "/api/sensors/14/calibrate/wet", "/api/sensors/15/calibrate/wet"
+    };
 
-    // Simplified calibrate endpoint that accepts action in URL
-    server.on("^\\/api\\/sensors\\/(\\d+)\\/calibrate\\/(dry|wet)$", HTTP_POST,
-        [](AsyncWebServerRequest* request) {
-            uint8_t sensor_idx = request->pathArg(0).toInt();
-            String action = request->pathArg(1);
+    for (int i = 0; i < 16; i++) {
+        server.on(cal_dry_paths[i], HTTP_POST, [](AsyncWebServerRequest* request) {
+            String url = request->url();
+            // Extract sensor index from URL like /api/sensors/X/calibrate/dry
+            int start = 13; // length of "/api/sensors/"
+            int end = url.indexOf('/', start);
+            uint8_t sensor_idx = url.substring(start, end).toInt();
 
             if (s_calibration_callback) {
-                if (s_calibration_callback(sensor_idx, action.c_str())) {
-                    sendSuccess(request, "Calibration point set");
+                if (s_calibration_callback(sensor_idx, "dry")) {
+                    sendSuccess(request, "Dry calibration point set");
                 } else {
                     sendError(request, 400, "Calibration failed");
                 }
             } else {
                 sendError(request, 501, "Calibration not available");
             }
+        });
+
+        server.on(cal_wet_paths[i], HTTP_POST, [](AsyncWebServerRequest* request) {
+            String url = request->url();
+            int start = 13;
+            int end = url.indexOf('/', start);
+            uint8_t sensor_idx = url.substring(start, end).toInt();
+
+            if (s_calibration_callback) {
+                if (s_calibration_callback(sensor_idx, "wet")) {
+                    sendSuccess(request, "Wet calibration point set");
+                } else {
+                    sendError(request, 400, "Calibration failed");
+                }
+            } else {
+                sendError(request, 501, "Calibration not available");
+            }
+        });
+    }
+
+    // Config sections - register SPECIFIC routes FIRST (before general /api/config)
+    server.on("/api/config/wifi", HTTP_GET, [](AsyncWebServerRequest* request) {
+        handleGetConfigSection(request, "wifi");
+    });
+    server.on("/api/config/wifi", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handlePostConfigSection(request, "wifi", data, len);
         }
     );
 
-    // Configuration
+    server.on("/api/config/mqtt", HTTP_GET, [](AsyncWebServerRequest* request) {
+        handleGetConfigSection(request, "mqtt");
+    });
+    server.on("/api/config/mqtt", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handlePostConfigSection(request, "mqtt", data, len);
+        }
+    );
+
+    server.on("/api/config/sensors", HTTP_GET, [](AsyncWebServerRequest* request) {
+        Serial.println("[API] GET /api/config/sensors");
+        handleGetConfigSection(request, "sensors");
+    });
+    server.on("/api/config/sensors", HTTP_POST,
+        [](AsyncWebServerRequest* request) {
+            // Body handler sends response - main handler does nothing
+        },
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            // Only process when we have all the data
+            if (index + len == total) {
+                handlePostConfigSection(request, "sensors", data, len);
+            }
+        }
+    );
+
+    server.on("/api/config/relays", HTTP_GET, [](AsyncWebServerRequest* request) {
+        handleGetConfigSection(request, "relays");
+    });
+    server.on("/api/config/relays", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handlePostConfigSection(request, "relays", data, len);
+        }
+    );
+
+    server.on("/api/config/espnow", HTTP_GET, [](AsyncWebServerRequest* request) {
+        handleGetConfigSection(request, "espnow");
+    });
+    server.on("/api/config/espnow", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handlePostConfigSection(request, "espnow", data, len);
+        }
+    );
+
+    // General /api/config routes - register AFTER specific section routes
     server.on("/api/config", HTTP_GET, handleGetConfig);
 
     server.on("/api/config", HTTP_POST,
@@ -121,42 +285,42 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         }
     );
 
-    // Config sections
-    server.on("^\\/api\\/config\\/(wifi|mqtt|sensors|relays|espnow)$", HTTP_GET,
-        [](AsyncWebServerRequest* request) {
-            handleGetConfigSection(request, request->pathArg(0));
-        }
-    );
-
-    server.on("^\\/api\\/config\\/(wifi|mqtt|sensors|relays|espnow)$", HTTP_POST,
-        [](AsyncWebServerRequest* request) {},
-        nullptr,
-        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            handlePostConfigSection(request, request->pathArg(0), data, len);
-        }
-    );
-
-    // Relays (Greenhouse)
+    // Relays (Greenhouse) - explicit routes
     server.on("/api/relays", HTTP_GET, handleGetRelays);
 
-    server.on("^\\/api\\/relays\\/(\\d+)$", HTTP_POST,
-        [](AsyncWebServerRequest* request) {},
-        nullptr,
-        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            uint8_t relay_idx = request->pathArg(0).toInt();
-            handlePostRelay(request, relay_idx, data, len);
-        }
-    );
+    // Relay control routes 0-3
+    static const char* relay_paths[] = {"/api/relays/0", "/api/relays/1", "/api/relays/2", "/api/relays/3"};
+    for (int i = 0; i < 4; i++) {
+        server.on(relay_paths[i], HTTP_POST,
+            [](AsyncWebServerRequest* request) {},
+            nullptr,
+            [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+                String url = request->url();
+                uint8_t relay_idx = url.substring(url.lastIndexOf('/') + 1).toInt();
+                handlePostRelay(request, relay_idx, data, len);
+            }
+        );
+    }
 
     // Paired Devices (Hub)
     server.on("/api/devices", HTTP_GET, handleGetDevices);
 
-    server.on("^\\/api\\/devices\\/(\\d+)$", HTTP_DELETE,
-        [](AsyncWebServerRequest* request) {
-            uint8_t device_idx = request->pathArg(0).toInt();
-            handleDeleteDevice(request, device_idx);
-        }
-    );
+    // Device deletion routes 0-15
+    static const char* device_paths[] = {
+        "/api/devices/0", "/api/devices/1", "/api/devices/2", "/api/devices/3",
+        "/api/devices/4", "/api/devices/5", "/api/devices/6", "/api/devices/7",
+        "/api/devices/8", "/api/devices/9", "/api/devices/10", "/api/devices/11",
+        "/api/devices/12", "/api/devices/13", "/api/devices/14", "/api/devices/15"
+    };
+    for (int i = 0; i < 16; i++) {
+        server.on(device_paths[i], HTTP_DELETE,
+            [](AsyncWebServerRequest* request) {
+                String url = request->url();
+                uint8_t device_idx = url.substring(url.lastIndexOf('/') + 1).toInt();
+                handleDeleteDevice(request, device_idx);
+            }
+        );
+    }
 
     // WiFi
     server.on("/api/wifi/networks", HTTP_GET, handleGetWifiNetworks);
@@ -200,20 +364,20 @@ void ApiEndpoints::handleGetSensors(AsyncWebServerRequest* request) {
     JsonDocument doc;
     JsonArray sensors = doc["sensors"].to<JsonArray>();
 
-    const auto& config = Config.get();
-    for (uint8_t i = 0; i < config.sensor_count; i++) {
+    const auto& config = Config.getConfig();
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
         JsonObject sensor = sensors.add<JsonObject>();
         buildSensorJson(sensor, i);
     }
 
-    doc["count"] = config.sensor_count;
+    doc["count"] = IWMP_MAX_SENSORS;
     sendJson(request, doc);
 }
 
 void ApiEndpoints::handleGetSensor(AsyncWebServerRequest* request, uint8_t index) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.sensor_count) {
+    if (index >= IWMP_MAX_SENSORS) {
         sendError(request, 404, "Sensor not found");
         return;
     }
@@ -323,7 +487,7 @@ void ApiEndpoints::handleGetConfigSection(AsyncWebServerRequest* request, const 
         JsonArray arr = doc.to<JsonArray>();
         buildRelayConfigJson(arr);
     } else if (section == "espnow") {
-        const auto& config = Config.get();
+        const auto& config = Config.getConfig();
         doc["channel"] = config.espnow.channel;
         doc["encryption"] = config.espnow.encryption_enabled;
     } else {
@@ -336,10 +500,18 @@ void ApiEndpoints::handleGetConfigSection(AsyncWebServerRequest* request, const 
 
 void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const String& section,
                                            uint8_t* data, size_t len) {
+    Serial.printf("[API] POST /api/config/%s (%d bytes)\n", section.c_str(), len);
+
+    if (len == 0) {
+        sendError(request, 400, "Empty request body");
+        return;
+    }
+
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, data, len);
 
     if (error) {
+        Serial.printf("[API] JSON parse error: %s\n", error.c_str());
         sendError(request, 400, "Invalid JSON");
         return;
     }
@@ -353,13 +525,25 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
         JsonObject obj = doc.as<JsonObject>();
         success = parseMqttConfig(obj);
     } else if (section == "sensors") {
+        if (!doc.is<JsonArray>()) {
+            Serial.println("[API] Error: sensors data is not an array");
+            sendError(request, 400, "Expected array for sensors");
+            return;
+        }
         JsonArray arr = doc.as<JsonArray>();
+        Serial.printf("[API] Saving sensors, array size: %d\n", arr.size());
+        if (arr.size() == 0) {
+            Serial.println("[API] Error: sensors array is empty");
+            sendError(request, 400, "Empty sensors array");
+            return;
+        }
         success = parseSensorConfig(arr);
+        Serial.printf("[API] parseSensorConfig returned: %s\n", success ? "true" : "false");
     } else if (section == "relays") {
         JsonArray arr = doc.as<JsonArray>();
         success = parseRelayConfig(arr);
     } else if (section == "espnow") {
-        auto& config = Config.get();
+        auto& config = Config.getConfigMutable();
         if (doc.containsKey("channel")) {
             config.espnow.channel = doc["channel"];
             success = true;
@@ -372,8 +556,10 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
 
     if (success) {
         Config.save();
+        Serial.println("[API] Config saved successfully");
         sendSuccess(request, "Configuration saved");
     } else {
+        Serial.println("[API] Failed to parse configuration");
         sendError(request, 400, "Failed to parse configuration");
     }
 }
@@ -384,21 +570,21 @@ void ApiEndpoints::handleGetRelays(AsyncWebServerRequest* request) {
     JsonDocument doc;
     JsonArray relays = doc["relays"].to<JsonArray>();
 
-    const auto& config = Config.get();
-    for (uint8_t i = 0; i < config.relay_count; i++) {
+    const auto& config = Config.getConfig();
+    for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
         JsonObject relay = relays.add<JsonObject>();
         buildRelayJson(relay, i);
     }
 
-    doc["count"] = config.relay_count;
+    doc["count"] = IWMP_MAX_RELAYS;
     sendJson(request, doc);
 }
 
 void ApiEndpoints::handlePostRelay(AsyncWebServerRequest* request, uint8_t index,
                                    uint8_t* data, size_t len) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.relay_count) {
+    if (index >= IWMP_MAX_RELAYS) {
         sendError(request, 404, "Relay not found");
         return;
     }
@@ -453,6 +639,16 @@ void ApiEndpoints::handleGetDevices(AsyncWebServerRequest* request) {
             device["rssi"] = device_list[i].rssi;
             device["online"] = device_list[i].online;
             device["last_seen"] = device_list[i].last_seen;
+            device["moisture_percent"] = device_list[i].moisture_percent;
+            if (!isnan(device_list[i].temperature)) {
+                device["temperature"] = device_list[i].temperature;
+            }
+            if (!isnan(device_list[i].humidity)) {
+                device["humidity"] = device_list[i].humidity;
+            }
+            if (device_list[i].battery_percent < 255) {
+                device["battery_percent"] = device_list[i].battery_percent;
+            }
         }
 
         doc["count"] = count;
@@ -510,10 +706,13 @@ void ApiEndpoints::handlePostWifiConnect(AsyncWebServerRequest* request, uint8_t
         return;
     }
 
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     strlcpy(config.wifi.ssid, doc["ssid"] | "", sizeof(config.wifi.ssid));
     strlcpy(config.wifi.password, doc["password"] | "", sizeof(config.wifi.password));
-    config.wifi.enabled = true;
+
+    if (doc.containsKey("hub_address")) {
+        strlcpy(config.wifi.hub_address, doc["hub_address"] | "", sizeof(config.wifi.hub_address));
+    }
 
     Config.save();
 
@@ -526,7 +725,7 @@ void ApiEndpoints::handlePostWifiConnect(AsyncWebServerRequest* request, uint8_t
 // ============ JSON Builders ============
 
 void ApiEndpoints::buildStatusJson(JsonDocument& doc) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
     doc["device_id"] = config.identity.device_id;
     doc["device_type"] = config.identity.device_type;
@@ -544,8 +743,8 @@ void ApiEndpoints::buildStatusJson(JsonDocument& doc) {
     doc["free_heap"] = ESP.getFreeHeap();
 
     // Sensor summary
-    doc["sensor_count"] = config.sensor_count;
-    doc["relay_count"] = config.relay_count;
+    doc["sensor_count"] = IWMP_MAX_SENSORS;
+    doc["relay_count"] = IWMP_MAX_RELAYS;
 }
 
 void ApiEndpoints::buildSystemInfoJson(JsonDocument& doc) {
@@ -561,7 +760,7 @@ void ApiEndpoints::buildSystemInfoJson(JsonDocument& doc) {
     doc["sdk_version"] = ESP.getSdkVersion();
 
     uint8_t mac[6];
-    WiFi.macAddress(mac);
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
     char mac_str[18];
     snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -571,21 +770,25 @@ void ApiEndpoints::buildSystemInfoJson(JsonDocument& doc) {
 }
 
 void ApiEndpoints::buildSensorJson(JsonObject& obj, uint8_t index) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.sensor_count) {
+    if (index >= IWMP_MAX_SENSORS) {
         return;
     }
 
-    const auto& sensor_cfg = config.sensors[index];
+    const auto& sensor_cfg = config.moisture_sensors[index];
 
     obj["index"] = index;
-    obj["name"] = sensor_cfg.name;
+    obj["name"] = sensor_cfg.sensor_name;
     obj["enabled"] = sensor_cfg.enabled;
-    obj["input_type"] = sensor_cfg.input_type;
-    obj["pin"] = sensor_cfg.pin;
+    obj["input_type"] = static_cast<uint8_t>(sensor_cfg.input_type);
+    obj["adc_pin"] = sensor_cfg.adc_pin;
+    obj["ads_channel"] = sensor_cfg.ads_channel;
+    obj["ads_i2c_address"] = sensor_cfg.ads_i2c_address;
+    obj["mux_channel"] = sensor_cfg.mux_channel;
     obj["dry_value"] = sensor_cfg.dry_value;
     obj["wet_value"] = sensor_cfg.wet_value;
+    obj["warning_level"] = sensor_cfg.warning_level;
 
     // Get live reading if callback available
     if (s_sensor_callback) {
@@ -596,23 +799,35 @@ void ApiEndpoints::buildSensorJson(JsonObject& obj, uint8_t index) {
             obj["percent"] = percent;
         }
     }
+
+    // Get sensor hardware status if callback available
+    if (s_sensor_status_callback) {
+        SensorStatusInfo status = {};
+        if (s_sensor_status_callback(index, status)) {
+            obj["ready"] = status.ready;
+            obj["hw_connected"] = status.hw_connected;
+            obj["input_type_name"] = status.input_type;
+        }
+    }
 }
 
 void ApiEndpoints::buildRelayJson(JsonObject& obj, uint8_t index) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.relay_count) {
+    if (index >= IWMP_MAX_RELAYS) {
         return;
     }
 
     const auto& relay_cfg = config.relays[index];
 
     obj["index"] = index;
-    obj["name"] = relay_cfg.name;
+    obj["name"] = relay_cfg.relay_name;
     obj["enabled"] = relay_cfg.enabled;
-    obj["pin"] = relay_cfg.pin;
+    obj["pin"] = relay_cfg.gpio_pin;
     obj["active_low"] = relay_cfg.active_low;
-    obj["auto_mode"] = relay_cfg.auto_mode;
+    obj["max_on_time_sec"] = relay_cfg.max_on_time_sec;
+    obj["min_off_time_sec"] = relay_cfg.min_off_time_sec;
+    obj["cooldown_sec"] = relay_cfg.cooldown_sec;
 
     // Get live state if callback available
     if (s_relay_state_callback) {
@@ -638,63 +853,66 @@ void ApiEndpoints::buildConfigJson(JsonDocument& doc) {
 }
 
 void ApiEndpoints::buildWifiConfigJson(JsonObject& obj) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
     obj["ssid"] = config.wifi.ssid;
     // Don't expose password
-    obj["enabled"] = config.wifi.enabled;
-    obj["ap_mode"] = config.wifi.ap_mode;
-    obj["ap_ssid"] = config.wifi.ap_ssid;
+    obj["use_static_ip"] = config.wifi.use_static_ip;
+    obj["channel"] = config.wifi.wifi_channel;
+    obj["hub_address"] = config.wifi.hub_address;
 }
 
 void ApiEndpoints::buildMqttConfigJson(JsonObject& obj) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
     obj["enabled"] = config.mqtt.enabled;
-    obj["server"] = config.mqtt.server;
+    obj["server"] = config.mqtt.broker;
     obj["port"] = config.mqtt.port;
     obj["username"] = config.mqtt.username;
     // Don't expose password
-    obj["topic_prefix"] = config.mqtt.topic_prefix;
-    obj["ha_discovery"] = config.mqtt.ha_discovery;
+    obj["base_topic"] = config.mqtt.base_topic;
+    obj["ha_discovery"] = config.mqtt.ha_discovery_enabled;
 }
 
 void ApiEndpoints::buildSensorConfigJson(JsonArray& arr) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    for (uint8_t i = 0; i < config.sensor_count; i++) {
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
         JsonObject sensor = arr.add<JsonObject>();
-        sensor["name"] = config.sensors[i].name;
-        sensor["enabled"] = config.sensors[i].enabled;
-        sensor["input_type"] = config.sensors[i].input_type;
-        sensor["pin"] = config.sensors[i].pin;
-        sensor["dry_value"] = config.sensors[i].dry_value;
-        sensor["wet_value"] = config.sensors[i].wet_value;
-        sensor["sample_interval_ms"] = config.sensors[i].sample_interval_ms;
-        sensor["sample_count"] = config.sensors[i].sample_count;
+        sensor["name"] = config.moisture_sensors[i].sensor_name;
+        sensor["enabled"] = config.moisture_sensors[i].enabled;
+        sensor["input_type"] = static_cast<uint8_t>(config.moisture_sensors[i].input_type);
+        sensor["adc_pin"] = config.moisture_sensors[i].adc_pin;
+        sensor["ads_channel"] = config.moisture_sensors[i].ads_channel;
+        sensor["ads_i2c_address"] = config.moisture_sensors[i].ads_i2c_address;
+        sensor["mux_channel"] = config.moisture_sensors[i].mux_channel;
+        sensor["dry_value"] = config.moisture_sensors[i].dry_value;
+        sensor["wet_value"] = config.moisture_sensors[i].wet_value;
+        sensor["sample_delay_ms"] = config.moisture_sensors[i].sample_delay_ms;
+        sensor["reading_samples"] = config.moisture_sensors[i].reading_samples;
+        sensor["warning_level"] = config.moisture_sensors[i].warning_level;
     }
 }
 
 void ApiEndpoints::buildRelayConfigJson(JsonArray& arr) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    for (uint8_t i = 0; i < config.relay_count; i++) {
+    for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
         JsonObject relay = arr.add<JsonObject>();
-        relay["name"] = config.relays[i].name;
+        relay["name"] = config.relays[i].relay_name;
         relay["enabled"] = config.relays[i].enabled;
-        relay["pin"] = config.relays[i].pin;
+        relay["pin"] = config.relays[i].gpio_pin;
         relay["active_low"] = config.relays[i].active_low;
-        relay["auto_mode"] = config.relays[i].auto_mode;
-        relay["min_on_time_s"] = config.relays[i].min_on_time_s;
-        relay["max_on_time_s"] = config.relays[i].max_on_time_s;
-        relay["cooldown_s"] = config.relays[i].cooldown_s;
+        relay["max_on_time_sec"] = config.relays[i].max_on_time_sec;
+        relay["min_off_time_sec"] = config.relays[i].min_off_time_sec;
+        relay["cooldown_sec"] = config.relays[i].cooldown_sec;
     }
 }
 
 // ============ JSON Parsers ============
 
 bool ApiEndpoints::parseWifiConfig(JsonObject& obj) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     if (obj.containsKey("ssid")) {
@@ -707,23 +925,18 @@ bool ApiEndpoints::parseWifiConfig(JsonObject& obj) {
         changed = true;
     }
 
-    if (obj.containsKey("enabled")) {
-        config.wifi.enabled = obj["enabled"];
+    if (obj.containsKey("use_static_ip")) {
+        config.wifi.use_static_ip = obj["use_static_ip"];
         changed = true;
     }
 
-    if (obj.containsKey("ap_mode")) {
-        config.wifi.ap_mode = obj["ap_mode"];
+    if (obj.containsKey("channel")) {
+        config.wifi.wifi_channel = obj["channel"];
         changed = true;
     }
 
-    if (obj.containsKey("ap_ssid")) {
-        strlcpy(config.wifi.ap_ssid, obj["ap_ssid"], sizeof(config.wifi.ap_ssid));
-        changed = true;
-    }
-
-    if (obj.containsKey("ap_password")) {
-        strlcpy(config.wifi.ap_password, obj["ap_password"], sizeof(config.wifi.ap_password));
+    if (obj.containsKey("hub_address")) {
+        strlcpy(config.wifi.hub_address, obj["hub_address"] | "", sizeof(config.wifi.hub_address));
         changed = true;
     }
 
@@ -731,7 +944,7 @@ bool ApiEndpoints::parseWifiConfig(JsonObject& obj) {
 }
 
 bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     if (obj.containsKey("enabled")) {
@@ -740,7 +953,7 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
     }
 
     if (obj.containsKey("server")) {
-        strlcpy(config.mqtt.server, obj["server"], sizeof(config.mqtt.server));
+        strlcpy(config.mqtt.broker, obj["server"], sizeof(config.mqtt.broker));
         changed = true;
     }
 
@@ -759,13 +972,13 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
         changed = true;
     }
 
-    if (obj.containsKey("topic_prefix")) {
-        strlcpy(config.mqtt.topic_prefix, obj["topic_prefix"], sizeof(config.mqtt.topic_prefix));
+    if (obj.containsKey("base_topic")) {
+        strlcpy(config.mqtt.base_topic, obj["base_topic"], sizeof(config.mqtt.base_topic));
         changed = true;
     }
 
     if (obj.containsKey("ha_discovery")) {
-        config.mqtt.ha_discovery = obj["ha_discovery"];
+        config.mqtt.ha_discovery_enabled = obj["ha_discovery"];
         changed = true;
     }
 
@@ -773,7 +986,7 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
 }
 
 bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     size_t index = 0;
@@ -782,34 +995,97 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
             break;
         }
 
-        if (sensor.containsKey("name")) {
-            strlcpy(config.sensors[index].name, sensor["name"],
-                    sizeof(config.sensors[index].name));
+        // Skip empty objects (placeholders for unchanged sensors)
+        if (sensor.size() == 0) {
+            index++;
+            continue;
+        }
+
+        Serial.printf("[API] Processing sensor %d (%d fields)\n", index, sensor.size());
+
+        if (sensor["name"].is<const char*>()) {
+            strlcpy(config.moisture_sensors[index].sensor_name, sensor["name"],
+                    sizeof(config.moisture_sensors[index].sensor_name));
             changed = true;
         }
 
-        if (sensor.containsKey("enabled")) {
-            config.sensors[index].enabled = sensor["enabled"];
+        if (sensor["enabled"].is<bool>()) {
+            config.moisture_sensors[index].enabled = sensor["enabled"];
             changed = true;
         }
 
-        if (sensor.containsKey("dry_value")) {
-            config.sensors[index].dry_value = sensor["dry_value"];
+        // Input type (0=Direct ADC, 1=ADS1115, 2=Mux)
+        if (sensor["input_type"].is<int>()) {
+            SensorInputType old_type = config.moisture_sensors[index].input_type;
+            SensorInputType new_type = static_cast<SensorInputType>(sensor["input_type"].as<int>());
+            config.moisture_sensors[index].input_type = new_type;
+            changed = true;
+
+            // Auto-update calibration defaults when switching input types
+            // Only if calibration values weren't explicitly provided in this request
+            if (old_type != new_type && !sensor.containsKey("dry_value") && !sensor.containsKey("wet_value")) {
+                if (new_type == SensorInputType::ADS1115) {
+                    // Switching TO ADS1115: use 16-bit defaults
+                    config.moisture_sensors[index].dry_value = 45000;  // ADS1115 typical dry
+                    config.moisture_sensors[index].wet_value = 18000;  // ADS1115 typical wet
+                    Serial.printf("[API] Auto-set ADS1115 calibration defaults for sensor %d\n", index);
+                } else if (old_type == SensorInputType::ADS1115) {
+                    // Switching FROM ADS1115: use 12-bit defaults
+                    config.moisture_sensors[index].dry_value = 3500;   // Direct ADC typical dry
+                    config.moisture_sensors[index].wet_value = 1500;   // Direct ADC typical wet
+                    Serial.printf("[API] Auto-set Direct ADC calibration defaults for sensor %d\n", index);
+                }
+            }
+        }
+
+        // Direct ADC pin
+        if (sensor["adc_pin"].is<int>()) {
+            config.moisture_sensors[index].adc_pin = sensor["adc_pin"];
             changed = true;
         }
 
-        if (sensor.containsKey("wet_value")) {
-            config.sensors[index].wet_value = sensor["wet_value"];
+        // ADS1115 channel (0-3)
+        if (sensor["ads_channel"].is<int>()) {
+            config.moisture_sensors[index].ads_channel = sensor["ads_channel"];
             changed = true;
         }
 
-        if (sensor.containsKey("sample_interval_ms")) {
-            config.sensors[index].sample_interval_ms = sensor["sample_interval_ms"];
+        // ADS1115 I2C address
+        if (sensor["ads_i2c_address"].is<int>()) {
+            config.moisture_sensors[index].ads_i2c_address = sensor["ads_i2c_address"];
             changed = true;
         }
 
-        if (sensor.containsKey("sample_count")) {
-            config.sensors[index].sample_count = sensor["sample_count"];
+        // Mux channel (0-15)
+        if (sensor["mux_channel"].is<int>()) {
+            config.moisture_sensors[index].mux_channel = sensor["mux_channel"];
+            changed = true;
+        }
+
+        // Calibration values
+        if (sensor["dry_value"].is<int>()) {
+            config.moisture_sensors[index].dry_value = sensor["dry_value"];
+            changed = true;
+        }
+
+        if (sensor["wet_value"].is<int>()) {
+            config.moisture_sensors[index].wet_value = sensor["wet_value"];
+            changed = true;
+        }
+
+        // Sampling configuration
+        if (sensor["sample_delay_ms"].is<int>()) {
+            config.moisture_sensors[index].sample_delay_ms = sensor["sample_delay_ms"];
+            changed = true;
+        }
+
+        if (sensor["reading_samples"].is<int>()) {
+            config.moisture_sensors[index].reading_samples = sensor["reading_samples"];
+            changed = true;
+        }
+
+        if (sensor["warning_level"].is<int>()) {
+            config.moisture_sensors[index].warning_level = sensor["warning_level"];
             changed = true;
         }
 
@@ -820,7 +1096,7 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
 }
 
 bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     size_t index = 0;
@@ -829,39 +1105,39 @@ bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
             break;
         }
 
-        if (relay.containsKey("name")) {
-            strlcpy(config.relays[index].name, relay["name"],
-                    sizeof(config.relays[index].name));
+        if (relay["name"].is<const char*>()) {
+            strlcpy(config.relays[index].relay_name, relay["name"],
+                    sizeof(config.relays[index].relay_name));
             changed = true;
         }
 
-        if (relay.containsKey("enabled")) {
+        if (relay["enabled"].is<bool>()) {
             config.relays[index].enabled = relay["enabled"];
             changed = true;
         }
 
-        if (relay.containsKey("active_low")) {
+        if (relay["active_low"].is<bool>()) {
             config.relays[index].active_low = relay["active_low"];
             changed = true;
         }
 
-        if (relay.containsKey("auto_mode")) {
-            config.relays[index].auto_mode = relay["auto_mode"];
+        if (relay["pin"].is<int>()) {
+            config.relays[index].gpio_pin = relay["pin"];
             changed = true;
         }
 
-        if (relay.containsKey("min_on_time_s")) {
-            config.relays[index].min_on_time_s = relay["min_on_time_s"];
+        if (relay["max_on_time_sec"].is<int>()) {
+            config.relays[index].max_on_time_sec = relay["max_on_time_sec"];
             changed = true;
         }
 
-        if (relay.containsKey("max_on_time_s")) {
-            config.relays[index].max_on_time_s = relay["max_on_time_s"];
+        if (relay["min_off_time_sec"].is<int>()) {
+            config.relays[index].min_off_time_sec = relay["min_off_time_sec"];
             changed = true;
         }
 
-        if (relay.containsKey("cooldown_s")) {
-            config.relays[index].cooldown_s = relay["cooldown_s"];
+        if (relay["cooldown_sec"].is<int>()) {
+            config.relays[index].cooldown_sec = relay["cooldown_sec"];
             changed = true;
         }
 

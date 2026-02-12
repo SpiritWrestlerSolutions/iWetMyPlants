@@ -5,6 +5,8 @@
 
 #pragma once
 
+#ifndef IWMP_NO_ENVIRONMENTAL
+
 #include <Arduino.h>
 #include <DHT.h>
 #include "config_schema.h"
@@ -72,3 +74,5 @@ private:
 };
 
 } // namespace iwmp
+
+#endif // IWMP_NO_ENVIRONMENTAL

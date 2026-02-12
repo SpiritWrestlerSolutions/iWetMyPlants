@@ -3,7 +3,7 @@
  * @brief Direct ESP32 ADC input implementation
  */
 
-#include "capacitive_moisture.h"
+#include "capacitive_moisture.h" 
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
 
@@ -109,17 +109,17 @@ void DirectAdcInput::configureAdc() {
     analogReadResolution(ESP32_ADC_WIDTH);
 
     // Set attenuation for full 0-3.3V range
-    // ADC_ATTEN_DB_11 gives approximately 0-3.3V input range
-    adc_attenuation_t atten;
+    // ADC_ATTEN_DB_12 (formerly DB_11) gives approximately 0-3.3V input range
+    adc_atten_t atten;
     switch (_attenuation) {
         case 0: atten = ADC_ATTEN_DB_0; break;    // 0-1.1V
         case 1: atten = ADC_ATTEN_DB_2_5; break;  // 0-1.5V
         case 2: atten = ADC_ATTEN_DB_6; break;    // 0-2.2V
         case 3:
-        default: atten = ADC_ATTEN_DB_11; break;  // 0-3.3V
+        default: atten = ADC_ATTEN_DB_12; break;  // 0-3.3V (use DB_12, DB_11 is deprecated)
     }
 
-    analogSetPinAttenuation(_pin, atten);
+    analogSetPinAttenuation(_pin, static_cast<adc_attenuation_t>(atten));
 }
 
 } // namespace iwmp

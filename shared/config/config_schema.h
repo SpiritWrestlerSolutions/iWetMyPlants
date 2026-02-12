@@ -13,7 +13,7 @@
 namespace iwmp {
 
 // Configuration version for migration support
-static constexpr uint32_t CONFIG_VERSION = 1;
+static constexpr uint32_t CONFIG_VERSION = 2;
 
 // Device type identifiers
 enum class DeviceType : uint8_t {
@@ -40,6 +40,7 @@ struct WifiConfig {
     uint32_t subnet;                // Subnet mask
     uint32_t dns;                   // DNS server
     uint8_t wifi_channel;           // WiFi channel (important for ESP-NOW coexistence)
+    char hub_address[40];           // Hub IP for Remote reporting (e.g. "192.168.1.50")
 } __attribute__((packed));
 
 // ============ MQTT CONFIGURATION ============
@@ -85,6 +86,7 @@ struct MoistureSensorConfig {
     uint8_t reading_samples;        // Number of samples to average
     uint16_t sample_delay_ms;       // Delay between samples
     char sensor_name[32];           // User-friendly name
+    uint8_t warning_level;          // Moisture % below which to trigger warning (0 = disabled)
 } __attribute__((packed));
 
 // ============ ENVIRONMENTAL SENSOR CONFIG ============

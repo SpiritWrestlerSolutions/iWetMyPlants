@@ -1,164 +1,118 @@
 /**
  * @file remote_controller.h
- * @brief Remote device main controller
+ * @brief Remote device controller — clean state machine
  *
- * Single sensor node with deep sleep support for battery operation.
+ * Single AsyncWebServer created at boot. Supports:
+ * - WiFi STA connection to user's network
+ * - AP mode for initial WiFi setup (captive portal)
+ * - HTTP POST reporting to Hub
+ * - MQTT publishing to broker (via shared MqttManager)
+ * - Web UI: status page + settings page
  */
 
 #pragma once
 
 #include <Arduino.h>
 #include "power_modes.h"
-#include "espnow_manager.h"
-#include "wifi_manager.h"
 #include "sensor_interface.h"
-#include "message_types.h"
 
 namespace iwmp {
 
-enum class RemoteState {
+class RemoteWeb;
+
+enum class RemoteState : uint8_t {
     BOOT,
-    CHECK_WAKE_REASON,
-    QUICK_READ,          // Battery mode: read and send, then sleep
-    CONFIG_MODE,         // AP + captive portal for setup
-    POWERED_MODE,        // USB powered: continuous WiFi + MQTT
-    DEEP_SLEEP
+    CONFIG_MODE,     // AP + captive portal, no WiFi SSID configured
+    CONNECTING,      // Attempting WiFi STA connection
+    RUNNING,         // Normal operation: reads, reports, publishes
 };
 
-enum class RemoteMode {
-    BATTERY,             // Deep sleep between readings
-    POWERED              // Continuous operation with USB power
-};
-
-/**
- * @brief Remote device controller
- */
 class RemoteController {
 public:
-    /**
-     * @brief Initialize remote
-     */
     void begin();
-
-    /**
-     * @brief Main loop processing
-     */
     void loop();
 
-    /**
-     * @brief Get current state
-     * @return Remote state
-     */
+    // State
     RemoteState getState() const { return _state; }
 
-    /**
-     * @brief Get operating mode
-     * @return Remote mode
-     */
-    RemoteMode getMode() const { return _mode; }
-
-    /**
-     * @brief Force enter configuration mode
-     */
-    void enterConfigMode();
-
-    /**
-     * @brief Get moisture sensor
-     * @return Pointer to moisture sensor
-     */
+    // Sensor data (used by RemoteWeb)
+    uint8_t getLastMoisturePercent() const { return _last_moisture_percent; }
+    uint16_t getLastRawValue() const { return _last_raw_value; }
+    const char* getSensorTypeName() const;
     MoistureSensor* getSensor() { return _sensor.get(); }
 
-    /**
-     * @brief Get last moisture reading
-     * @return Moisture percentage
-     */
-    uint8_t getLastMoisturePercent() const { return _last_moisture_percent; }
+    // Hub report status (used by RemoteWeb status page)
+    uint32_t getLastHubReportTime() const { return _last_hub_report_sec; }
+    bool getLastHubReportSuccess() const { return _last_hub_report_ok; }
 
-    /**
-     * @brief Get last raw reading
-     * @return Raw ADC value
-     */
-    uint16_t getLastRawValue() const { return _last_raw_value; }
+    // MQTT status
+    bool isMqttConnected() const;
+
+    // Callbacks from RemoteWeb
+    void onMqttConfigChanged();
+    void onSensorConfigChanged();
+    void scheduleReboot(uint32_t delay_ms);
+
+    // External trigger (e.g. button hold)
+    void enterConfigMode();
 
 private:
     RemoteState _state = RemoteState::BOOT;
-    RemoteMode _mode = RemoteMode::BATTERY;
+    uint32_t _state_enter_time = 0;
 
+    // Subsystems
     std::unique_ptr<MoistureSensor> _sensor;
     PowerModes _power;
+    RemoteWeb* _web = nullptr;
 
-    // Last readings
+    // Sensor cache
     uint8_t _last_moisture_percent = 0;
     uint16_t _last_raw_value = 0;
+    uint32_t _last_sensor_read_time = 0;
+
+    // Hub reporting
+    uint32_t _last_hub_report_time = 0;
+    uint32_t _last_hub_report_sec = 0;
+    bool _last_hub_report_ok = false;
+
+    // MQTT
+    uint32_t _last_mqtt_publish_time = 0;
+
+    // Reboot
+    bool _reboot_pending = false;
+    uint32_t _reboot_at = 0;
+
+    // WiFi tracking
+    bool _was_connected = false;
+    uint32_t _wifi_lost_time = 0;
+
+    // One-shot flag per state (reset on state entry)
+    bool _state_initialized = false;
 
     // Timing
-    uint32_t _state_enter_time = 0;
-    uint32_t _last_send_time = 0;
+    static constexpr uint32_t SENSOR_READ_INTERVAL_MS = 5000;
+    static constexpr uint32_t HUB_REPORT_INTERVAL_MS = 60000;
+    static constexpr uint32_t MQTT_PUBLISH_INTERVAL_MS = 60000;
+    static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;  // 2x WiFiMgr timeout — let it retry once
+    static constexpr uint32_t WIFI_LOST_FALLBACK_MS = 60000;
 
-    static constexpr uint32_t CONFIG_MODE_TIMEOUT_MS = 300000;  // 5 minutes
-    static constexpr uint32_t POWERED_SEND_INTERVAL_MS = 60000; // 1 minute
-
-    // ============ State Machine ============
-
+    // State handlers
     void enterState(RemoteState new_state);
-    void handleBootState();
-    void handleCheckWakeReasonState();
-    void handleQuickReadState();
-    void handleConfigModeState();
-    void handlePoweredModeState();
+    void handleBoot();
+    void handleConfigMode();
+    void handleConnecting();
+    void handleRunning();
 
-    // ============ Quick Read Cycle ============
-
-    /**
-     * @brief Execute quick read cycle (battery mode)
-     * Read sensor, send via ESP-NOW, go to sleep
-     */
-    void quickReadCycle();
-
-    // ============ Internal Methods ============
-
-    /**
-     * @brief Initialize sensor from config
-     */
-    void initializeSensor();
-
-    /**
-     * @brief Read and send moisture data
-     * @return true if sent successfully
-     */
-    bool readAndSend();
-
-    /**
-     * @brief Build moisture message
-     * @param msg Output message
-     * @param raw Raw ADC value
-     * @param percent Moisture percentage
-     */
-    void buildMoistureMessage(MoistureReadingMsg& msg, uint16_t raw, uint8_t percent);
-
-    /**
-     * @brief Send battery status
-     */
-    void sendBatteryStatus();
-
-    /**
-     * @brief Check if should enter config mode
-     * @return true if config mode triggered
-     */
-    bool shouldEnterConfigMode();
-
-    /**
-     * @brief Setup web server for config mode
-     */
-    void setupConfigWebServer();
-
-    /**
-     * @brief Determine operating mode based on power source
-     */
-    void determineOperatingMode();
+    // Actions
+    void initSensor();
+    void initMqtt();
+    void startWeb();
+    void readSensor();
+    bool reportToHub();
+    void publishMqtt();
+    void checkReboot();
 };
 
-// Global remote controller instance
 extern RemoteController Remote;
 
 } // namespace iwmp
