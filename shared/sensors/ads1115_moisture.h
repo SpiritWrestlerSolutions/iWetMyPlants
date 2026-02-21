@@ -21,6 +21,7 @@
 
 #include "sensor_interface.h"
 #include <Adafruit_ADS1X15.h>
+#include <freertos/semphr.h>
 
 namespace iwmp {
 
@@ -165,6 +166,14 @@ public:
      */
     static Adafruit_ADS1115* getSharedAdc(uint8_t address);
 
+    /**
+     * @brief Assign a TwoWire instance to an ADS1115 address.
+     * Call before begin() to put each ADS on its own I2C bus.
+     * @param address I2C address (0x48-0x4B)
+     * @param wire TwoWire* (e.g. &Wire or &Wire1)
+     */
+    static void setWireForAddress(uint8_t address, TwoWire* wire);
+
 private:
     uint8_t _address;
     uint8_t _channel;
@@ -173,6 +182,7 @@ private:
     bool _initialized = false;
 
     Adafruit_ADS1115* _adc = nullptr;
+    TwoWire* _wire = nullptr;  // Per-instance Wire (set from static mapping during begin())
 
     /**
      * @brief Apply gain setting to ADC
@@ -189,9 +199,28 @@ private:
      */
     float getVoltageScale() const;
 
+    /**
+     * @brief Read ADC with delay instead of busy-wait polling.
+     * Avoids the Adafruit library's tight conversionComplete() loop
+     * which generates I2C timeout errors under WiFi load.
+     * @param channel ADC channel (0-3)
+     * @return Raw signed ADC value, or 0 on failure
+     */
+    int16_t readADCSafe(uint8_t channel);
+
+    /**
+     * @brief Get conversion delay in microseconds for current data rate
+     */
+    uint32_t getConversionDelayUs() const;
+
+    uint8_t _consecutive_errors = 0;
+    static constexpr uint8_t MAX_CONSECUTIVE_ERRORS = 5;
+
     // Shared ADC instances (one per I2C address)
     static Adafruit_ADS1115 s_adc_instances[4];
     static bool s_adc_initialized[4];
+    static TwoWire* s_adc_wire[4];       // Wire instance per address (default: &Wire)
+    static SemaphoreHandle_t s_i2c_mutex[4];  // Per-bus mutex for thread safety
 };
 
 } // namespace iwmp

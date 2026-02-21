@@ -1,9 +1,12 @@
 /**
  * @file remote_controller.cpp
- * @brief Remote device controller — ground-up rewrite
+ * @brief Remote device controller — three operating modes
  *
- * Clean state machine with ONE web server created at boot.
- * No shared web server, no create/destroy cycles.
+ * WiFi:      STA + HTTP POST to Hub + MQTT + web UI
+ * Standalone: Permanent AP + web UI (no reporting)
+ * Low Power:  Deep sleep + ESP-NOW to Hub
+ *
+ * Override button forces Standalone from any mode.
  */
 
 #include "remote_controller.h"
@@ -11,16 +14,22 @@
 #include "config_manager.h"
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
+#include "espnow_manager.h"
+#include "message_types.h"
 #include "logger.h"
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <esp_mac.h>
+#include <esp_wifi.h>
 
 namespace iwmp {
 
 RemoteController Remote;
 static constexpr const char* TAG = "Remote";
+
+// RTC flag for override mode — survives deep sleep
+RTC_DATA_ATTR bool rtc_override_active = false;
 
 // ============================================================
 // Public
@@ -38,23 +47,75 @@ void RemoteController::begin() {
     // will call startWeb() after WiFi is up.
     _web = new RemoteWeb();
 
-    // Decide initial state
-    const auto& wifi = Config.getWifi();
-    if (strlen(wifi.ssid) == 0) {
-        enterState(RemoteState::CONFIG_MODE);
-    } else {
-        enterState(RemoteState::CONNECTING);
+    // Determine operating mode from config
+    RemoteMode mode = getOperatingMode();
+    LOG_I(TAG, "Operating mode: %d (%s)", (int)mode,
+          mode == RemoteMode::WIFI ? "WiFi" :
+          mode == RemoteMode::STANDALONE ? "Standalone" : "Low Power");
+
+    // Check override: button wake or RTC override flag
+    if (rtc_override_active) {
+        LOG_I(TAG, "RTC override flag set — entering Standalone");
+        _override_active = true;
+        enterState(RemoteState::STANDALONE);
+        return;
+    }
+
+    if (_power.wokeFromButton()) {
+        LOG_I(TAG, "Button wake detected — entering Standalone override");
+        _override_active = true;
+        rtc_override_active = true;
+        enterState(RemoteState::STANDALONE);
+        return;
+    }
+
+    // Normal boot based on configured mode
+    switch (mode) {
+        case RemoteMode::LOW_POWER:
+            if (_power.wokeFromTimer() || !_power.isFirstBoot()) {
+                enterState(RemoteState::LOW_POWER_CYCLE);
+            } else {
+                // First boot in Low Power mode — enter Standalone for initial setup
+                LOG_I(TAG, "First boot in Low Power mode — Standalone for setup");
+                enterState(RemoteState::STANDALONE);
+            }
+            break;
+
+        case RemoteMode::STANDALONE:
+            enterState(RemoteState::STANDALONE);
+            break;
+
+        case RemoteMode::WIFI:
+        default: {
+            const auto& wifi = Config.getWifi();
+            if (strlen(wifi.ssid) == 0) {
+                enterState(RemoteState::CONFIG_MODE);
+            } else {
+                enterState(RemoteState::CONNECTING);
+            }
+            break;
+        }
     }
 }
 
 void RemoteController::loop() {
     switch (_state) {
-        case RemoteState::BOOT:        handleBoot();        break;
-        case RemoteState::CONFIG_MODE: handleConfigMode();   break;
-        case RemoteState::CONNECTING:  handleConnecting();   break;
-        case RemoteState::RUNNING:     handleRunning();      break;
+        case RemoteState::BOOT:            handleBoot();            break;
+        case RemoteState::CONFIG_MODE:     handleConfigMode();      break;
+        case RemoteState::CONNECTING:      handleConnecting();      break;
+        case RemoteState::RUNNING:         handleRunning();         break;
+        case RemoteState::STANDALONE:      handleStandalone();      break;
+        case RemoteState::LOW_POWER_CYCLE: handleLowPowerCycle();   break;
     }
     checkReboot();
+}
+
+RemoteMode RemoteController::getOperatingMode() const {
+    uint8_t mode = Config.getPower().operating_mode;
+    if (mode > (uint8_t)RemoteMode::LOW_POWER) {
+        return RemoteMode::WIFI;  // Safety default
+    }
+    return static_cast<RemoteMode>(mode);
 }
 
 // ============================================================
@@ -70,12 +131,7 @@ void RemoteController::enterState(RemoteState new_state) {
 
 void RemoteController::handleBoot() {
     // Safety: begin() already transitions out of BOOT
-    const auto& wifi = Config.getWifi();
-    if (strlen(wifi.ssid) == 0) {
-        enterState(RemoteState::CONFIG_MODE);
-    } else {
-        enterState(RemoteState::CONNECTING);
-    }
+    enterState(RemoteState::CONFIG_MODE);
 }
 
 void RemoteController::handleConfigMode() {
@@ -89,7 +145,6 @@ void RemoteController::handleConfigMode() {
         WiFiMgr.startAP(ap_ssid);
         WiFiMgr.startCaptivePortal();
 
-        // Start web server after WiFi/lwIP is up
         startWeb();
 
         _state_initialized = true;
@@ -97,11 +152,7 @@ void RemoteController::handleConfigMode() {
               ap_ssid, WiFiMgr.getAPIP().toString().c_str(), ESP.getFreeHeap());
     }
 
-    // Process captive portal DNS
     WiFiMgr.loop();
-
-    // Web server is already running on 0.0.0.0:80 — serves /settings
-    // User saves WiFi → scheduleReboot() → reboots → enters CONNECTING
 }
 
 void RemoteController::handleConnecting() {
@@ -110,7 +161,6 @@ void RemoteController::handleConnecting() {
         WiFiMgr.begin(wifi);
         WiFiMgr.connect();
 
-        // Start web server after WiFi/lwIP is up
         startWeb();
 
         LOG_I(TAG, "Connecting to: %s", wifi.ssid);
@@ -130,7 +180,6 @@ void RemoteController::handleConnecting() {
         return;
     }
 
-    // Timeout → fall back to config mode
     if ((millis() - _state_enter_time) > WIFI_CONNECT_TIMEOUT_MS) {
         LOG_W(TAG, "WiFi timeout after %us, entering config mode",
               WIFI_CONNECT_TIMEOUT_MS / 1000);
@@ -145,12 +194,21 @@ void RemoteController::handleRunning() {
 
         initMqtt();
 
+        // Configure override button pin as input (for polling)
+        const auto& pwr = Config.getPower();
+        if (pwr.wake_on_button && pwr.wake_button_pin > 0) {
+            pinMode(pwr.wake_button_pin, INPUT_PULLUP);
+        }
+
         _state_initialized = true;
         LOG_I(TAG, "Running — heap: %u", ESP.getFreeHeap());
     }
 
     WiFiMgr.loop();
     Mqtt.loop();
+
+    // Check override button
+    checkOverrideButton();
 
     // Track WiFi connectivity
     if (WiFiMgr.isConnected()) {
@@ -171,7 +229,6 @@ void RemoteController::handleRunning() {
         return;
     }
 
-    // Read sensor
     readSensor();
 
     // Report to Hub
@@ -189,6 +246,180 @@ void RemoteController::handleRunning() {
         _last_mqtt_publish_time = millis();
         publishMqtt();
     }
+}
+
+// ============================================================
+// STANDALONE — Permanent AP mode
+// ============================================================
+
+void RemoteController::handleStandalone() {
+    if (!_state_initialized) {
+        char ap_ssid[32];
+        const char* name = Config.getDeviceName();
+        if (strlen(name) > 0) {
+            strlcpy(ap_ssid, name, sizeof(ap_ssid));
+            // Replace spaces with dashes for SSID
+            for (char* p = ap_ssid; *p; p++) {
+                if (*p == ' ') *p = '-';
+            }
+        } else {
+            snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Remote-%s",
+                     Config.getDeviceId() + 6);
+        }
+
+        WifiConfig empty_cfg = {};
+        WiFiMgr.begin(empty_cfg);
+        WiFiMgr.startAP(ap_ssid);
+        WiFiMgr.startCaptivePortal();
+
+        startWeb();
+
+        _state_initialized = true;
+
+        if (_override_active) {
+            LOG_I(TAG, "Standalone (OVERRIDE): AP=%s, IP=%s, heap=%u",
+                  ap_ssid, WiFiMgr.getAPIP().toString().c_str(), ESP.getFreeHeap());
+        } else {
+            LOG_I(TAG, "Standalone: AP=%s, IP=%s, heap=%u",
+                  ap_ssid, WiFiMgr.getAPIP().toString().c_str(), ESP.getFreeHeap());
+        }
+    }
+
+    WiFiMgr.loop();
+
+    // Read sensor at regular intervals
+    readSensor();
+}
+
+// ============================================================
+// LOW POWER CYCLE — Read → ESP-NOW → Deep Sleep
+// ============================================================
+
+void RemoteController::handleLowPowerCycle() {
+    LOG_I(TAG, "=== Low Power Cycle (boot #%lu) ===", rtc_boot_count);
+
+    // 1. Read sensor (blocking — single averaged read)
+    if (_sensor && _sensor->isReady()) {
+        _last_raw_value = _sensor->readRawAveraged();
+        _last_moisture_percent = _sensor->rawToPercent(_last_raw_value);
+        LOG_I(TAG, "Sensor: %u%% (raw=%u)", _last_moisture_percent, _last_raw_value);
+    } else {
+        LOG_W(TAG, "Sensor not ready, sending with cached values");
+    }
+
+    // 2. Init WiFi radio (STA mode, don't connect — just need radio for ESP-NOW)
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(false);
+
+    // 3. Set channel to match Hub's WiFi/ESP-NOW channel
+    const auto& espnow_cfg = Config.getEspNow();
+    uint8_t channel = espnow_cfg.channel;
+    if (channel == 0) channel = 1;
+
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+    LOG_I(TAG, "Radio on channel %d", channel);
+
+    // 4. Init ESP-NOW
+    if (!EspNow.begin(channel)) {
+        LOG_E(TAG, "ESP-NOW init failed!");
+        _power.recordFailedSend();
+        goto sleep;
+    }
+
+    // 5. Add Hub as peer
+    {
+        const uint8_t* hub_mac = espnow_cfg.hub_mac;
+
+        // Validate Hub MAC (not all zeros)
+        bool mac_valid = false;
+        for (int i = 0; i < 6; i++) {
+            if (hub_mac[i] != 0) { mac_valid = true; break; }
+        }
+
+        if (!mac_valid) {
+            LOG_E(TAG, "Hub MAC not configured!");
+            _power.recordFailedSend();
+            EspNow.end();
+            goto sleep;
+        }
+
+        if (!EspNow.addPeer(hub_mac, channel)) {
+            LOG_W(TAG, "Failed to add Hub peer (may already exist)");
+        }
+
+        LOG_I(TAG, "Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X",
+              hub_mac[0], hub_mac[1], hub_mac[2],
+              hub_mac[3], hub_mac[4], hub_mac[5]);
+
+        // 6. Send AnnounceMsg every N cycles so Hub auto-discovers
+        if (rtc_boot_count % ANNOUNCE_EVERY_N_CYCLES == 0) {
+            LOG_I(TAG, "Sending announce (every %lu cycles)", ANNOUNCE_EVERY_N_CYCLES);
+            EspNow.sendAnnounce(
+                (uint8_t)DeviceType::REMOTE,
+                Config.getDeviceName(),
+                IWMP_VERSION,
+                0x01  // Capability: has moisture sensor
+            );
+            delay(50);  // Brief gap between messages
+        }
+
+        // 7. Send MoistureReadingMsg
+        bool ok = EspNow.sendMoistureReading(
+            hub_mac,
+            0,  // sensor_index
+            _last_raw_value,
+            _last_moisture_percent
+        );
+
+        if (ok) {
+            LOG_I(TAG, "ESP-NOW send OK");
+            _power.recordSuccessfulSend();
+        } else {
+            LOG_W(TAG, "ESP-NOW send failed");
+            _power.recordFailedSend();
+        }
+
+        EspNow.end();
+    }
+
+sleep:
+    // 8. Calculate sleep duration (with backoff on failure)
+    uint32_t sleep_sec = _power.calculateOptimalSleepDuration();
+    LOG_I(TAG, "Sleeping for %lu seconds (failures: %u)",
+          sleep_sec, _power.getConsecutiveFailures());
+
+    // 9. Deep sleep — does not return
+    _power.enterDeepSleep(sleep_sec);
+
+    // Should never reach here
+    LOG_E(TAG, "Deep sleep failed! Rebooting...");
+    ESP.restart();
+}
+
+// ============================================================
+// Override Button Check (for WiFi/Standalone modes)
+// ============================================================
+
+void RemoteController::checkOverrideButton() {
+    const auto& pwr = Config.getPower();
+    if (!pwr.wake_on_button || pwr.wake_button_pin == 0) return;
+
+    if ((millis() - _last_button_check) < BUTTON_CHECK_INTERVAL_MS) return;
+    _last_button_check = millis();
+
+    bool pressed = (digitalRead(pwr.wake_button_pin) == LOW);
+
+    if (pressed && !_button_was_pressed) {
+        // Button just pressed — debounce check: wait and re-read
+        delay(50);
+        pressed = (digitalRead(pwr.wake_button_pin) == LOW);
+        if (pressed) {
+            LOG_I(TAG, "Override button pressed — rebooting into Standalone");
+            rtc_override_active = true;
+            scheduleReboot(500);
+        }
+    }
+    _button_was_pressed = pressed;
 }
 
 // ============================================================
@@ -236,7 +467,6 @@ bool RemoteController::reportToHub() {
     char url[80];
     snprintf(url, sizeof(url), "http://%s/api/remote/report", wifi.hub_address);
 
-    // Hub expects colon-separated MAC (DeviceRegistry::stringToMac format)
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     char mac_str[18];
@@ -355,6 +585,13 @@ void RemoteController::scheduleReboot(uint32_t delay_ms) {
     _reboot_pending = true;
     _reboot_at = millis() + delay_ms;
     LOG_I(TAG, "Reboot in %lu ms", delay_ms);
+}
+
+void RemoteController::returnToConfiguredMode() {
+    LOG_I(TAG, "Returning to configured mode (clearing override)");
+    _override_active = false;
+    rtc_override_active = false;
+    scheduleReboot(500);
 }
 
 void RemoteController::checkReboot() {

@@ -22,8 +22,17 @@ namespace hub_pins {
     constexpr uint8_t ADC_PINS[] = {32, 33, 34, 35, 36, 37, 38, 39}; // ADC1 only (WiFi safe)
     constexpr uint8_t I2C_SDA = 21;
     constexpr uint8_t I2C_SCL = 22;
+    constexpr uint8_t I2C1_SDA = 16;    // Secondary I2C bus for 2nd ADS1115
+    constexpr uint8_t I2C1_SCL = 17;    // (GPIO 16/17 free on WROOM; avoid on WROVER/PSRAM boards)
     constexpr uint8_t STATUS_LED = 4;
     constexpr uint8_t CONFIG_BUTTON = 0;  // Boot button
+    // CD74HC4067 MUX — reversed pin order for ribbon cable convenience
+    // Physical board order: 25, 26, 27, 14  →  assigned as S3, S2, S1, S0
+    constexpr uint8_t MUX_SIG = 33;     // ADC1_CH5, D33 on board (GPIO32/33 share 32kHz XTAL pads — unused on dev boards)
+    constexpr uint8_t MUX_S0  = 14;     // LSB — physically last wire on ribbon
+    constexpr uint8_t MUX_S1  = 27;
+    constexpr uint8_t MUX_S2  = 26;
+    constexpr uint8_t MUX_S3  = 25;     // MSB — physically first wire on ribbon
 }
 
 // Remote (ESP32-C3) defaults
@@ -100,6 +109,7 @@ constexpr uint32_t AUTOMATION_CHECK_INTERVAL_SEC = 60;
 constexpr uint32_t DEEP_SLEEP_DURATION_SEC = 300;   // 5 minutes
 constexpr uint32_t AWAKE_DURATION_MS = 5000;        // 5 seconds
 constexpr float LOW_BATTERY_VOLTAGE = 3.3f;         // 3.3V threshold
+constexpr uint8_t REMOTE_OPERATING_MODE = 0;        // RemoteMode::WIFI
 
 } // namespace defaults
 
@@ -234,6 +244,7 @@ inline void initDefaultPower(PowerConfig& power) {
     power.power_detect_pin = remote_pins::POWER_DETECT;
     power.battery_adc_pin = remote_pins::BATTERY_ADC;
     power.low_battery_voltage = defaults::LOW_BATTERY_VOLTAGE;
+    power.operating_mode = defaults::REMOTE_OPERATING_MODE;
 }
 
 /**

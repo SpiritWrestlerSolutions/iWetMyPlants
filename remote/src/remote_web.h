@@ -2,7 +2,7 @@
  * @file remote_web.h
  * @brief Lightweight web server for Remote device
  *
- * Single AsyncWebServer with ~15 routes serving ~7KB of HTML.
+ * Single AsyncWebServer with ~18 routes serving ~10KB of HTML.
  * Created once at boot, never destroyed.
  * Binds 0.0.0.0:80 — works on both AP and STA interfaces.
  */
@@ -41,7 +41,11 @@ private:
     void handlePostSensorConfig(AsyncWebServerRequest* request,
                                  uint8_t* data, size_t len,
                                  size_t index, size_t total);
+    void handlePostModeConfig(AsyncWebServerRequest* request,
+                               uint8_t* data, size_t len,
+                               size_t index, size_t total);
     void handlePostReboot(AsyncWebServerRequest* request);
+    void handlePostReturnMode(AsyncWebServerRequest* request);
 };
 
 // HTML pages (PROGMEM, defined in remote_web.cpp)

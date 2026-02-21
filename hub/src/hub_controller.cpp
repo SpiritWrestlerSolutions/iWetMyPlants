@@ -10,6 +10,9 @@
 #include "web_server.h"
 #include "rapid_read.h"
 #include "sensor_interface.h"
+#include "mux_moisture.h"
+#include <Wire.h>
+#include "defaults.h"
 
 namespace iwmp {
 
@@ -686,7 +689,20 @@ void HubController::initializeLocalSensors() {
             continue;
         }
 
-        _local_sensors[i] = createMoistureSensor(sensor_cfg, i);
+        // MUX sensors need hub-specific pin assignments — create directly
+        // rather than through the shared factory which doesn't know the pins.
+        if (sensor_cfg.input_type == SensorInputType::MUX_CD74HC4067) {
+            auto mux_input = std::make_unique<MuxInput>(
+                hub_pins::MUX_SIG,
+                hub_pins::MUX_S0, hub_pins::MUX_S1,
+                hub_pins::MUX_S2, hub_pins::MUX_S3,
+                sensor_cfg.mux_channel
+            );
+            _local_sensors[i] = std::make_unique<MoistureSensor>(std::move(mux_input), sensor_cfg);
+            _local_sensors[i]->setIndex(i);
+        } else {
+            _local_sensors[i] = createMoistureSensor(sensor_cfg, i);
+        }
 
         if (_local_sensors[i]) {
             _local_sensors[i]->begin();
@@ -701,6 +717,14 @@ void HubController::initializeLocalSensors() {
             LOG_W(TAG, "Failed to create sensor %d", i);
         }
     }
+
+    // Re-assert I2C config after Adafruit BusIO's Wire.begin() calls
+    // (Adafruit_I2CDevice::begin() calls Wire.begin() without pin args,
+    // which can disrupt the peripheral on some ESP32 Arduino core versions)
+    Wire.begin(hub_pins::I2C_SDA, hub_pins::I2C_SCL);
+    Wire.setTimeOut(50);
+    Wire1.begin(hub_pins::I2C1_SDA, hub_pins::I2C1_SCL);
+    Wire1.setTimeOut(50);
 
     LOG_I(TAG, "Initialized %d local sensors", _local_sensor_count);
 }

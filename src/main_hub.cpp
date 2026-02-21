@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "watchdog.h"
 #include "defaults.h"
+#include "ads1115_moisture.h"
 
 using namespace iwmp;
 
@@ -47,21 +48,32 @@ void setup() {
         LOG_E(TAG, "Config manager initialization failed!");
     }
 
-    // Initialize I2C for ADS1115 and other I2C devices
+    // Initialize primary I2C bus (ADS1115 @ 0x48, SHT sensors, etc.)
     Wire.begin(hub_pins::I2C_SDA, hub_pins::I2C_SCL);
-    LOG_I(TAG, "I2C initialized on SDA=%d, SCL=%d", hub_pins::I2C_SDA, hub_pins::I2C_SCL);
+    Wire.setTimeOut(50);
+    LOG_I(TAG, "I2C bus 0: SDA=%d, SCL=%d", hub_pins::I2C_SDA, hub_pins::I2C_SCL);
 
-    // Scan I2C bus — helps diagnose ADS1115 address conflicts
-    {
+    // Initialize secondary I2C bus (ADS1115 @ 0x49)
+    Wire1.begin(hub_pins::I2C1_SDA, hub_pins::I2C1_SCL);
+    Wire1.setTimeOut(50);
+    LOG_I(TAG, "I2C bus 1: SDA=%d, SCL=%d", hub_pins::I2C1_SDA, hub_pins::I2C1_SCL);
+
+    // Map ADS1115 addresses to their I2C buses (one ADS per bus = no shared wiring)
+    Ads1115Input::setWireForAddress(0x48, &Wire);
+    Ads1115Input::setWireForAddress(0x49, &Wire1);
+
+    // Scan both I2C buses
+    for (uint8_t bus = 0; bus < 2; bus++) {
+        TwoWire& w = (bus == 0) ? Wire : Wire1;
         uint8_t found = 0;
         for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-            Wire.beginTransmission(addr);
-            if (Wire.endTransmission() == 0) {
-                LOG_I(TAG, "I2C device at 0x%02X", addr);
+            w.beginTransmission(addr);
+            if (w.endTransmission() == 0) {
+                LOG_I(TAG, "I2C%d: device at 0x%02X", bus, addr);
                 found++;
             }
         }
-        LOG_I(TAG, "I2C scan: %d device(s) found", found);
+        LOG_I(TAG, "I2C%d scan: %d device(s) found", bus, found);
     }
 
     // Initialize Hub controller (handles WiFi, ESP-NOW, MQTT, Web)

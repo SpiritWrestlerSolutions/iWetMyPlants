@@ -1,13 +1,13 @@
 /**
  * @file remote_controller.h
- * @brief Remote device controller — clean state machine
+ * @brief Remote device controller — three operating modes
  *
- * Single AsyncWebServer created at boot. Supports:
- * - WiFi STA connection to user's network
- * - AP mode for initial WiFi setup (captive portal)
- * - HTTP POST reporting to Hub
- * - MQTT publishing to broker (via shared MqttManager)
- * - Web UI: status page + settings page
+ * Supports three operating modes selected in config:
+ * - WiFi:       STA connection, HTTP POST to Hub, MQTT, web UI
+ * - Standalone:  Permanent AP, local web UI only, no reporting
+ * - Low Power:   Deep sleep + ESP-NOW, override button → Standalone
+ *
+ * Override button (momentary switch) forces Standalone from any mode.
  */
 
 #pragma once
@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include "power_modes.h"
 #include "sensor_interface.h"
+#include "config_schema.h"
 
 namespace iwmp {
 
@@ -22,9 +23,11 @@ class RemoteWeb;
 
 enum class RemoteState : uint8_t {
     BOOT,
-    CONFIG_MODE,     // AP + captive portal, no WiFi SSID configured
-    CONNECTING,      // Attempting WiFi STA connection
-    RUNNING,         // Normal operation: reads, reports, publishes
+    CONFIG_MODE,        // AP + captive portal (initial WiFi setup)
+    CONNECTING,         // WiFi STA connecting
+    RUNNING,            // WiFi mode operational
+    STANDALONE,         // Permanent AP mode (or override mode)
+    LOW_POWER_CYCLE,    // Read sensor → ESP-NOW → deep sleep
 };
 
 class RemoteController {
@@ -34,6 +37,8 @@ public:
 
     // State
     RemoteState getState() const { return _state; }
+    RemoteMode getOperatingMode() const;
+    bool isOverrideActive() const { return _override_active; }
 
     // Sensor data (used by RemoteWeb)
     uint8_t getLastMoisturePercent() const { return _last_moisture_percent; }
@@ -52,6 +57,7 @@ public:
     void onMqttConfigChanged();
     void onSensorConfigChanged();
     void scheduleReboot(uint32_t delay_ms);
+    void returnToConfiguredMode();
 
     // External trigger (e.g. button hold)
     void enterConfigMode();
@@ -59,6 +65,9 @@ public:
 private:
     RemoteState _state = RemoteState::BOOT;
     uint32_t _state_enter_time = 0;
+
+    // Operating mode
+    bool _override_active = false;
 
     // Subsystems
     std::unique_ptr<MoistureSensor> _sensor;
@@ -86,6 +95,10 @@ private:
     bool _was_connected = false;
     uint32_t _wifi_lost_time = 0;
 
+    // Override button (WiFi/Standalone modes)
+    uint32_t _last_button_check = 0;
+    bool _button_was_pressed = false;
+
     // One-shot flag per state (reset on state entry)
     bool _state_initialized = false;
 
@@ -93,8 +106,10 @@ private:
     static constexpr uint32_t SENSOR_READ_INTERVAL_MS = 5000;
     static constexpr uint32_t HUB_REPORT_INTERVAL_MS = 60000;
     static constexpr uint32_t MQTT_PUBLISH_INTERVAL_MS = 60000;
-    static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;  // 2x WiFiMgr timeout — let it retry once
+    static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
     static constexpr uint32_t WIFI_LOST_FALLBACK_MS = 60000;
+    static constexpr uint32_t BUTTON_CHECK_INTERVAL_MS = 100;
+    static constexpr uint32_t ANNOUNCE_EVERY_N_CYCLES = 10;
 
     // State handlers
     void enterState(RemoteState new_state);
@@ -102,6 +117,8 @@ private:
     void handleConfigMode();
     void handleConnecting();
     void handleRunning();
+    void handleStandalone();
+    void handleLowPowerCycle();
 
     // Actions
     void initSensor();
@@ -111,6 +128,7 @@ private:
     bool reportToHub();
     void publishMqtt();
     void checkReboot();
+    void checkOverrideButton();
 };
 
 extern RemoteController Remote;

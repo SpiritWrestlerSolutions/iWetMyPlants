@@ -61,6 +61,10 @@ uint16_t MuxInput::readRaw() {
         return 0;
     }
 
+    // Re-apply channel selection each read — multiple MuxInput instances
+    // can share the same GPIO pins (one per MUX channel), so we must
+    // set the select lines to our channel before sampling.
+    applyChannelSelection();
     return analogRead(_sig_pin);
 }
 

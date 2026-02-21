@@ -13,7 +13,7 @@
 namespace iwmp {
 
 // Configuration version for migration support
-static constexpr uint32_t CONFIG_VERSION = 2;
+static constexpr uint32_t CONFIG_VERSION = 3;
 
 // Device type identifiers
 enum class DeviceType : uint8_t {
@@ -131,6 +131,13 @@ struct SensorRelayBinding {
     bool hysteresis_enabled;        // Prevent rapid cycling
 } __attribute__((packed));
 
+// ============ REMOTE OPERATING MODE ============
+enum class RemoteMode : uint8_t {
+    WIFI = 0,           // STA + HTTP reporting + MQTT (default)
+    STANDALONE = 1,     // Permanent AP, local web UI only
+    LOW_POWER = 2       // Deep sleep + ESP-NOW
+};
+
 // ============ POWER CONFIGURATION (Remote only) ============
 struct PowerConfig {
     bool battery_powered;           // Running on battery
@@ -142,6 +149,7 @@ struct PowerConfig {
     uint8_t power_detect_pin;       // Pin to detect USB power
     uint8_t battery_adc_pin;        // Pin for battery voltage monitoring
     float low_battery_voltage;      // Threshold for low battery warning
+    uint8_t operating_mode;         // RemoteMode enum (0=WiFi, 1=Standalone, 2=LowPower)
 } __attribute__((packed));
 
 // ============ MASTER CONFIGURATION ============
