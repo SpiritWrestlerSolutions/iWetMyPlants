@@ -153,6 +153,11 @@ private:
     static void handleGetSystemInfo(AsyncWebServerRequest* request);
     static void handlePostReboot(AsyncWebServerRequest* request);
 
+    // OTA
+    static void handlePostOta(AsyncWebServerRequest* request);
+    static void handleOtaUpload(AsyncWebServerRequest* request, const String& filename,
+                                size_t index, uint8_t* data, size_t len, bool final);
+
     // Sensors
     static void handleGetSensors(AsyncWebServerRequest* request);
     static void handleGetSensor(AsyncWebServerRequest* request, uint8_t index);

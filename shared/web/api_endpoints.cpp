@@ -6,6 +6,7 @@
 #include "api_endpoints.h"
 #include "../config/config_manager.h"
 #include <WiFi.h>
+#include <Update.h>
 #include <esp_system.h>
 #include <esp_chip_info.h>
 
@@ -61,7 +62,9 @@ void ApiEndpoints::sendError(AsyncWebServerRequest* request, int code, const cha
 void ApiEndpoints::sendJson(AsyncWebServerRequest* request, JsonDocument& doc, int code) {
     String response;
     serializeJson(doc, response);
-    request->send(code, "application/json", response);
+    AsyncWebServerResponse* res = request->beginResponse(code, "application/json", response);
+    res->addHeader("Access-Control-Allow-Origin", "*");
+    request->send(res);
 }
 
 // ============ Route Registration ============
@@ -168,6 +171,21 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
             handlePostWifiConnect(request, data, len);
         }
     );
+
+    // OTA firmware update (supports cross-origin requests from the web installer)
+    server.on("/api/system/ota", HTTP_POST,
+        handlePostOta,
+        handleOtaUpload
+    );
+
+    // CORS preflight — browsers send OPTIONS before cross-origin POST/DELETE
+    server.on("^\\/api\\/.*$", HTTP_OPTIONS, [](AsyncWebServerRequest* request) {
+        AsyncWebServerResponse* response = request->beginResponse(204);
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        response->addHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+        response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        request->send(response);
+    });
 
     Serial.println("[API] Routes registered");
 }
@@ -869,6 +887,51 @@ bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
     }
 
     return changed;
+}
+
+// ============ OTA Handlers ============
+
+void ApiEndpoints::handleOtaUpload(AsyncWebServerRequest* request, const String& filename,
+                                   size_t index, uint8_t* data, size_t len, bool final) {
+    if (index == 0) {
+        Serial.printf("[OTA] Upload started: %s\n", filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            Update.printError(Serial);
+        }
+    }
+
+    if (Update.isRunning()) {
+        if (Update.write(data, len) != len) {
+            Update.printError(Serial);
+        }
+    }
+
+    if (final) {
+        if (Update.end(true)) {
+            Serial.printf("[OTA] Upload complete: %u bytes\n", index + len);
+        } else {
+            Update.printError(Serial);
+        }
+    }
+}
+
+void ApiEndpoints::handlePostOta(AsyncWebServerRequest* request) {
+    bool success = !Update.hasError();
+
+    AsyncWebServerResponse* response = request->beginResponse(
+        success ? 200 : 500,
+        "application/json",
+        success ? "{\"success\":true,\"message\":\"Firmware updated. Rebooting...\"}"
+                : "{\"success\":false,\"error\":\"OTA update failed\"}"
+    );
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    response->addHeader("Connection", "close");
+    request->send(response);
+
+    if (success) {
+        delay(500);
+        ESP.restart();
+    }
 }
 
 } // namespace iwmp
