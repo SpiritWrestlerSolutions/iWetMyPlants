@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "date": "2026-01-29",
+  "commit": "",
+  "changelog": [
+    {
+      "version": "2.0.0",
+      "date": "2026-01-29",
+      "notes": [
+        "Complete ground-up rewrite with three independent device types",
+        "Hub: WiFi + ESP-NOW coordinator with MQTT / Home Assistant bridge",
+        "Remote: Ultra-low-power ESP32-C3 battery sensor node with deep sleep",
+        "Greenhouse: Multi-zone relay controller with automation engine",
+        "Shared library: config manager (NVS + CRC32), ESP-NOW mesh, MQTT auto-discovery",
+        "ADS1115, direct ADC, and CD74HC4067 mux sensor support",
+        "Captive portal for first-run WiFi provisioning",
+        "OTA firmware updates via web UI and this installer"
+      ]
+    }
+  ]
+}
