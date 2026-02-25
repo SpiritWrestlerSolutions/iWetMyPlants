@@ -46,7 +46,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=$(grep -oP '(?<=IWMP_VERSION=\\")[^"]+' platformio.ini | head -1)
+          VERSION=$(grep -oP '(?<=IWMP_VERSION=\\")[^"\\]+' platformio.ini | head -1)
           if [ -z "$VERSION" ]; then
             # fallback: read from the tag if triggered by a tag push
             VERSION="${GITHUB_REF_NAME#v}"
