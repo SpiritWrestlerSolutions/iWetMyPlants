@@ -10,6 +10,8 @@ jobs:
   build:
     name: Build firmware
     runs-on: ubuntu-latest
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
 
     steps:
       - name: Checkout
@@ -118,7 +120,7 @@ jobs:
       # Only runs on pushes to main or tag pushes (not PRs).
 
       - name: Deploy installer to /plants/install/
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -128,7 +130,7 @@ jobs:
           local-dir: ./installer/
 
       - name: Deploy firmware binaries to /plants/firmware/
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+        if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
