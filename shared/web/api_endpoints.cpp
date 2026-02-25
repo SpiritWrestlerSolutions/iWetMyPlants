@@ -289,28 +289,28 @@ void ApiEndpoints::handlePostConfig(AsyncWebServerRequest* request, uint8_t* dat
     bool changed = false;
 
     // Parse each section if present
-    if (doc.containsKey("wifi")) {
+    if (doc["wifi"].is<JsonObject>()) {
         JsonObject wifi = doc["wifi"];
         if (parseWifiConfig(wifi)) {
             changed = true;
         }
     }
 
-    if (doc.containsKey("mqtt")) {
+    if (doc["mqtt"].is<JsonObject>()) {
         JsonObject mqtt = doc["mqtt"];
         if (parseMqttConfig(mqtt)) {
             changed = true;
         }
     }
 
-    if (doc.containsKey("sensors")) {
+    if (doc["sensors"].is<JsonArray>()) {
         JsonArray sensors = doc["sensors"];
         if (parseSensorConfig(sensors)) {
             changed = true;
         }
     }
 
-    if (doc.containsKey("relays")) {
+    if (doc["relays"].is<JsonArray>()) {
         JsonArray relays = doc["relays"];
         if (parseRelayConfig(relays)) {
             changed = true;
@@ -378,11 +378,11 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
         success = parseRelayConfig(arr);
     } else if (section == "espnow") {
         auto& config = Config.get();
-        if (doc.containsKey("channel")) {
+        if (!doc["channel"].isNull()) {
             config.espnow.channel = doc["channel"];
             success = true;
         }
-        if (doc.containsKey("encryption")) {
+        if (!doc["encryption"].isNull()) {
             config.espnow.encryption_enabled = doc["encryption"];
             success = true;
         }
@@ -429,7 +429,7 @@ void ApiEndpoints::handlePostRelay(AsyncWebServerRequest* request, uint8_t index
         return;
     }
 
-    if (!doc.containsKey("state")) {
+    if (doc["state"].isNull()) {
         sendError(request, 400, "Missing 'state' field");
         return;
     }
@@ -523,7 +523,7 @@ void ApiEndpoints::handlePostWifiConnect(AsyncWebServerRequest* request, uint8_t
         return;
     }
 
-    if (!doc.containsKey("ssid")) {
+    if (doc["ssid"].isNull()) {
         sendError(request, 400, "Missing SSID");
         return;
     }
@@ -546,37 +546,57 @@ void ApiEndpoints::handlePostWifiConnect(AsyncWebServerRequest* request, uint8_t
 void ApiEndpoints::buildStatusJson(JsonDocument& doc) {
     const auto& config = Config.get();
 
-    doc["device_id"] = config.identity.device_id;
-    doc["device_type"] = config.identity.device_type;
+    doc["device_id"]        = config.identity.device_id;
+    doc["device_type"]      = config.identity.device_type;
+    doc["device_name"]      = config.identity.device_name;
     doc["firmware_version"] = config.identity.firmware_version;
 
     // WiFi status
     JsonObject wifi = doc["wifi"].to<JsonObject>();
     wifi["connected"] = WiFi.isConnected();
-    wifi["ssid"] = WiFi.SSID();
-    wifi["rssi"] = WiFi.RSSI();
-    wifi["ip"] = WiFi.localIP().toString();
+    wifi["ssid"]      = WiFi.SSID();
+    wifi["rssi"]      = WiFi.RSSI();
+    wifi["ip"]        = WiFi.localIP().toString();
 
-    // Uptime
+    // Uptime & memory
     doc["uptime_ms"] = millis();
     doc["free_heap"] = ESP.getFreeHeap();
 
     // Sensor summary
     doc["sensor_count"] = config.sensor_count;
-    doc["relay_count"] = config.relay_count;
+    doc["relay_count"]  = config.relay_count;
+
+    // Relay states (needed by HA integration and installer ping)
+    if (s_relay_state_callback && config.relay_count > 0) {
+        JsonArray relays = doc["relays"].to<JsonArray>();
+        for (uint8_t i = 0; i < config.relay_count; i++) {
+            JsonObject r = relays.add<JsonObject>();
+            r["index"] = i;
+            r["name"]  = config.relays[i].name;
+            bool state = false;
+            s_relay_state_callback(i, state);
+            r["state"] = state;
+        }
+    }
 }
 
 void ApiEndpoints::buildSystemInfoJson(JsonDocument& doc) {
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
 
-    doc["chip_model"] = ESP.getChipModel();
+    const auto& config = Config.get();
+    doc["version"]     = config.identity.firmware_version;
+    doc["device_id"]   = config.identity.device_id;
+    doc["device_type"] = config.identity.device_type;
+    doc["device_name"] = config.identity.device_name;
+
+    doc["chip_model"]    = ESP.getChipModel();
     doc["chip_revision"] = chip_info.revision;
-    doc["chip_cores"] = chip_info.cores;
-    doc["flash_size"] = ESP.getFlashChipSize();
-    doc["free_heap"] = ESP.getFreeHeap();
+    doc["chip_cores"]    = chip_info.cores;
+    doc["flash_size"]    = ESP.getFlashChipSize();
+    doc["free_heap"]     = ESP.getFreeHeap();
     doc["min_free_heap"] = ESP.getMinFreeHeap();
-    doc["sdk_version"] = ESP.getSdkVersion();
+    doc["sdk_version"]   = ESP.getSdkVersion();
 
     uint8_t mac[6];
     WiFi.macAddress(mac);
@@ -715,33 +735,33 @@ bool ApiEndpoints::parseWifiConfig(JsonObject& obj) {
     auto& config = Config.get();
     bool changed = false;
 
-    if (obj.containsKey("ssid")) {
-        strlcpy(config.wifi.ssid, obj["ssid"], sizeof(config.wifi.ssid));
+    if (!obj["ssid"].isNull()) {
+        strlcpy(config.wifi.ssid, obj["ssid"] | "", sizeof(config.wifi.ssid));
         changed = true;
     }
 
-    if (obj.containsKey("password")) {
-        strlcpy(config.wifi.password, obj["password"], sizeof(config.wifi.password));
+    if (!obj["password"].isNull()) {
+        strlcpy(config.wifi.password, obj["password"] | "", sizeof(config.wifi.password));
         changed = true;
     }
 
-    if (obj.containsKey("enabled")) {
+    if (!obj["enabled"].isNull()) {
         config.wifi.enabled = obj["enabled"];
         changed = true;
     }
 
-    if (obj.containsKey("ap_mode")) {
+    if (!obj["ap_mode"].isNull()) {
         config.wifi.ap_mode = obj["ap_mode"];
         changed = true;
     }
 
-    if (obj.containsKey("ap_ssid")) {
-        strlcpy(config.wifi.ap_ssid, obj["ap_ssid"], sizeof(config.wifi.ap_ssid));
+    if (!obj["ap_ssid"].isNull()) {
+        strlcpy(config.wifi.ap_ssid, obj["ap_ssid"] | "", sizeof(config.wifi.ap_ssid));
         changed = true;
     }
 
-    if (obj.containsKey("ap_password")) {
-        strlcpy(config.wifi.ap_password, obj["ap_password"], sizeof(config.wifi.ap_password));
+    if (!obj["ap_password"].isNull()) {
+        strlcpy(config.wifi.ap_password, obj["ap_password"] | "", sizeof(config.wifi.ap_password));
         changed = true;
     }
 
@@ -752,37 +772,37 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
     auto& config = Config.get();
     bool changed = false;
 
-    if (obj.containsKey("enabled")) {
+    if (!obj["enabled"].isNull()) {
         config.mqtt.enabled = obj["enabled"];
         changed = true;
     }
 
-    if (obj.containsKey("server")) {
-        strlcpy(config.mqtt.server, obj["server"], sizeof(config.mqtt.server));
+    if (!obj["server"].isNull()) {
+        strlcpy(config.mqtt.server, obj["server"] | "", sizeof(config.mqtt.server));
         changed = true;
     }
 
-    if (obj.containsKey("port")) {
+    if (!obj["port"].isNull()) {
         config.mqtt.port = obj["port"];
         changed = true;
     }
 
-    if (obj.containsKey("username")) {
-        strlcpy(config.mqtt.username, obj["username"], sizeof(config.mqtt.username));
+    if (!obj["username"].isNull()) {
+        strlcpy(config.mqtt.username, obj["username"] | "", sizeof(config.mqtt.username));
         changed = true;
     }
 
-    if (obj.containsKey("password")) {
-        strlcpy(config.mqtt.password, obj["password"], sizeof(config.mqtt.password));
+    if (!obj["password"].isNull()) {
+        strlcpy(config.mqtt.password, obj["password"] | "", sizeof(config.mqtt.password));
         changed = true;
     }
 
-    if (obj.containsKey("topic_prefix")) {
-        strlcpy(config.mqtt.topic_prefix, obj["topic_prefix"], sizeof(config.mqtt.topic_prefix));
+    if (!obj["topic_prefix"].isNull()) {
+        strlcpy(config.mqtt.topic_prefix, obj["topic_prefix"] | "", sizeof(config.mqtt.topic_prefix));
         changed = true;
     }
 
-    if (obj.containsKey("ha_discovery")) {
+    if (!obj["ha_discovery"].isNull()) {
         config.mqtt.ha_discovery = obj["ha_discovery"];
         changed = true;
     }
@@ -800,33 +820,33 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
             break;
         }
 
-        if (sensor.containsKey("name")) {
-            strlcpy(config.sensors[index].name, sensor["name"],
+        if (!sensor["name"].isNull()) {
+            strlcpy(config.sensors[index].name, sensor["name"] | "",
                     sizeof(config.sensors[index].name));
             changed = true;
         }
 
-        if (sensor.containsKey("enabled")) {
+        if (!sensor["enabled"].isNull()) {
             config.sensors[index].enabled = sensor["enabled"];
             changed = true;
         }
 
-        if (sensor.containsKey("dry_value")) {
+        if (!sensor["dry_value"].isNull()) {
             config.sensors[index].dry_value = sensor["dry_value"];
             changed = true;
         }
 
-        if (sensor.containsKey("wet_value")) {
+        if (!sensor["wet_value"].isNull()) {
             config.sensors[index].wet_value = sensor["wet_value"];
             changed = true;
         }
 
-        if (sensor.containsKey("sample_interval_ms")) {
+        if (!sensor["sample_interval_ms"].isNull()) {
             config.sensors[index].sample_interval_ms = sensor["sample_interval_ms"];
             changed = true;
         }
 
-        if (sensor.containsKey("sample_count")) {
+        if (!sensor["sample_count"].isNull()) {
             config.sensors[index].sample_count = sensor["sample_count"];
             changed = true;
         }
@@ -847,38 +867,38 @@ bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
             break;
         }
 
-        if (relay.containsKey("name")) {
-            strlcpy(config.relays[index].name, relay["name"],
+        if (!relay["name"].isNull()) {
+            strlcpy(config.relays[index].name, relay["name"] | "",
                     sizeof(config.relays[index].name));
             changed = true;
         }
 
-        if (relay.containsKey("enabled")) {
+        if (!relay["enabled"].isNull()) {
             config.relays[index].enabled = relay["enabled"];
             changed = true;
         }
 
-        if (relay.containsKey("active_low")) {
+        if (!relay["active_low"].isNull()) {
             config.relays[index].active_low = relay["active_low"];
             changed = true;
         }
 
-        if (relay.containsKey("auto_mode")) {
+        if (!relay["auto_mode"].isNull()) {
             config.relays[index].auto_mode = relay["auto_mode"];
             changed = true;
         }
 
-        if (relay.containsKey("min_on_time_s")) {
+        if (!relay["min_on_time_s"].isNull()) {
             config.relays[index].min_on_time_s = relay["min_on_time_s"];
             changed = true;
         }
 
-        if (relay.containsKey("max_on_time_s")) {
+        if (!relay["max_on_time_s"].isNull()) {
             config.relays[index].max_on_time_s = relay["max_on_time_s"];
             changed = true;
         }
 
-        if (relay.containsKey("cooldown_s")) {
+        if (!relay["cooldown_s"].isNull()) {
             config.relays[index].cooldown_s = relay["cooldown_s"];
             changed = true;
         }

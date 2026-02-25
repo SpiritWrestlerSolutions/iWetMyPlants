@@ -5,6 +5,7 @@
 
 #include "web_server.h"
 #include "api_endpoints.h"
+#include <ESPmDNS.h>
 
 namespace iwmp {
 
@@ -62,6 +63,21 @@ bool WebServer::begin(const DeviceIdentity& identity) {
     _running = true;
 
     Serial.printf("[Web] Server started on port %d\n", WEB_SERVER_PORT);
+
+    // Advertise via mDNS so the HA integration and installer can discover the device
+    String hostname = "iwmp-";
+    hostname += _identity.device_id;
+    hostname.toLowerCase();
+    if (MDNS.begin(hostname.c_str())) {
+        MDNS.addService("iwmp", "tcp", WEB_SERVER_PORT);
+        MDNS.addServiceTxt("iwmp", "tcp", "version",     _identity.firmware_version);
+        MDNS.addServiceTxt("iwmp", "tcp", "device_type", String((int)_identity.device_type).c_str());
+        MDNS.addServiceTxt("iwmp", "tcp", "device_name", _identity.device_name);
+        Serial.printf("[Web] mDNS started: %s.local\n", hostname.c_str());
+    } else {
+        Serial.println("[Web] mDNS failed to start");
+    }
+
     return true;
 }
 
@@ -273,7 +289,7 @@ void WebServer::registerStaticRoutes() {
 
 void WebServer::registerApiRoutes() {
     // Register all API endpoints
-    ApiEndpoints::registerAll(_server, this);
+    ApiEndpoints::registerRoutes(*_server);
 }
 
 // ============ Embedded HTML/CSS/JS ============
