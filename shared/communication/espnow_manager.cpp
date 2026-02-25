@@ -549,9 +549,9 @@ void EspNowManager::onDataSentStatic(const uint8_t* mac, esp_now_send_status_t s
     }
 }
 
-void EspNowManager::onDataRecvStatic(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
-    if (s_instance && info) {
-        s_instance->onDataRecv(info->src_addr, data, len);
+void EspNowManager::onDataRecvStatic(const uint8_t* mac_addr, const uint8_t* data, int len) {
+    if (s_instance && mac_addr) {
+        s_instance->onDataRecv(mac_addr, data, len);
     }
 }
 

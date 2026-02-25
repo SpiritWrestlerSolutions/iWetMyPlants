@@ -218,20 +218,20 @@ void ApiEndpoints::handleGetSensors(AsyncWebServerRequest* request) {
     JsonDocument doc;
     JsonArray sensors = doc["sensors"].to<JsonArray>();
 
-    const auto& config = Config.get();
-    for (uint8_t i = 0; i < config.sensor_count; i++) {
+    const auto& config = Config.getConfig();
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
         JsonObject sensor = sensors.add<JsonObject>();
         buildSensorJson(sensor, i);
     }
 
-    doc["count"] = config.sensor_count;
+    doc["count"] = IWMP_MAX_SENSORS;
     sendJson(request, doc);
 }
 
 void ApiEndpoints::handleGetSensor(AsyncWebServerRequest* request, uint8_t index) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.sensor_count) {
+    if (index >= IWMP_MAX_SENSORS) {
         sendError(request, 404, "Sensor not found");
         return;
     }
@@ -341,7 +341,7 @@ void ApiEndpoints::handleGetConfigSection(AsyncWebServerRequest* request, const 
         JsonArray arr = doc.to<JsonArray>();
         buildRelayConfigJson(arr);
     } else if (section == "espnow") {
-        const auto& config = Config.get();
+        const auto& config = Config.getConfig();
         doc["channel"] = config.espnow.channel;
         doc["encryption"] = config.espnow.encryption_enabled;
     } else {
@@ -377,7 +377,7 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
         JsonArray arr = doc.as<JsonArray>();
         success = parseRelayConfig(arr);
     } else if (section == "espnow") {
-        auto& config = Config.get();
+        auto& config = Config.getConfigMutable();
         if (!doc["channel"].isNull()) {
             config.espnow.channel = doc["channel"];
             success = true;
@@ -402,21 +402,21 @@ void ApiEndpoints::handleGetRelays(AsyncWebServerRequest* request) {
     JsonDocument doc;
     JsonArray relays = doc["relays"].to<JsonArray>();
 
-    const auto& config = Config.get();
-    for (uint8_t i = 0; i < config.relay_count; i++) {
+    const auto& config = Config.getConfig();
+    for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
         JsonObject relay = relays.add<JsonObject>();
         buildRelayJson(relay, i);
     }
 
-    doc["count"] = config.relay_count;
+    doc["count"] = IWMP_MAX_RELAYS;
     sendJson(request, doc);
 }
 
 void ApiEndpoints::handlePostRelay(AsyncWebServerRequest* request, uint8_t index,
                                    uint8_t* data, size_t len) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.relay_count) {
+    if (index >= IWMP_MAX_RELAYS) {
         sendError(request, 404, "Relay not found");
         return;
     }
@@ -528,10 +528,9 @@ void ApiEndpoints::handlePostWifiConnect(AsyncWebServerRequest* request, uint8_t
         return;
     }
 
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     strlcpy(config.wifi.ssid, doc["ssid"] | "", sizeof(config.wifi.ssid));
     strlcpy(config.wifi.password, doc["password"] | "", sizeof(config.wifi.password));
-    config.wifi.enabled = true;
 
     Config.save();
 
@@ -544,7 +543,7 @@ void ApiEndpoints::handlePostWifiConnect(AsyncWebServerRequest* request, uint8_t
 // ============ JSON Builders ============
 
 void ApiEndpoints::buildStatusJson(JsonDocument& doc) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
     doc["device_id"]        = config.identity.device_id;
     doc["device_type"]      = config.identity.device_type;
@@ -563,16 +562,16 @@ void ApiEndpoints::buildStatusJson(JsonDocument& doc) {
     doc["free_heap"] = ESP.getFreeHeap();
 
     // Sensor summary
-    doc["sensor_count"] = config.sensor_count;
-    doc["relay_count"]  = config.relay_count;
+    doc["sensor_count"] = IWMP_MAX_SENSORS;
+    doc["relay_count"]  = IWMP_MAX_RELAYS;
 
     // Relay states (needed by HA integration and installer ping)
-    if (s_relay_state_callback && config.relay_count > 0) {
+    if (s_relay_state_callback) {
         JsonArray relays = doc["relays"].to<JsonArray>();
-        for (uint8_t i = 0; i < config.relay_count; i++) {
+        for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
             JsonObject r = relays.add<JsonObject>();
             r["index"] = i;
-            r["name"]  = config.relays[i].name;
+            r["name"]  = config.relays[i].relay_name;
             bool state = false;
             s_relay_state_callback(i, state);
             r["state"] = state;
@@ -584,7 +583,7 @@ void ApiEndpoints::buildSystemInfoJson(JsonDocument& doc) {
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
 
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
     doc["version"]     = config.identity.firmware_version;
     doc["device_id"]   = config.identity.device_id;
     doc["device_type"] = config.identity.device_type;
@@ -609,19 +608,19 @@ void ApiEndpoints::buildSystemInfoJson(JsonDocument& doc) {
 }
 
 void ApiEndpoints::buildSensorJson(JsonObject& obj, uint8_t index) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.sensor_count) {
+    if (index >= IWMP_MAX_SENSORS) {
         return;
     }
 
-    const auto& sensor_cfg = config.sensors[index];
+    const auto& sensor_cfg = config.moisture_sensors[index];
 
     obj["index"] = index;
-    obj["name"] = sensor_cfg.name;
+    obj["name"] = sensor_cfg.sensor_name;
     obj["enabled"] = sensor_cfg.enabled;
-    obj["input_type"] = sensor_cfg.input_type;
-    obj["pin"] = sensor_cfg.pin;
+    obj["input_type"] = static_cast<uint8_t>(sensor_cfg.input_type);
+    obj["pin"] = sensor_cfg.adc_pin;
     obj["dry_value"] = sensor_cfg.dry_value;
     obj["wet_value"] = sensor_cfg.wet_value;
 
@@ -637,20 +636,19 @@ void ApiEndpoints::buildSensorJson(JsonObject& obj, uint8_t index) {
 }
 
 void ApiEndpoints::buildRelayJson(JsonObject& obj, uint8_t index) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    if (index >= config.relay_count) {
+    if (index >= IWMP_MAX_RELAYS) {
         return;
     }
 
     const auto& relay_cfg = config.relays[index];
 
     obj["index"] = index;
-    obj["name"] = relay_cfg.name;
+    obj["name"] = relay_cfg.relay_name;
     obj["enabled"] = relay_cfg.enabled;
-    obj["pin"] = relay_cfg.pin;
+    obj["pin"] = relay_cfg.gpio_pin;
     obj["active_low"] = relay_cfg.active_low;
-    obj["auto_mode"] = relay_cfg.auto_mode;
 
     // Get live state if callback available
     if (s_relay_state_callback) {
@@ -676,63 +674,59 @@ void ApiEndpoints::buildConfigJson(JsonDocument& doc) {
 }
 
 void ApiEndpoints::buildWifiConfigJson(JsonObject& obj) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
     obj["ssid"] = config.wifi.ssid;
     // Don't expose password
-    obj["enabled"] = config.wifi.enabled;
-    obj["ap_mode"] = config.wifi.ap_mode;
-    obj["ap_ssid"] = config.wifi.ap_ssid;
 }
 
 void ApiEndpoints::buildMqttConfigJson(JsonObject& obj) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
     obj["enabled"] = config.mqtt.enabled;
-    obj["server"] = config.mqtt.server;
+    obj["broker"] = config.mqtt.broker;
     obj["port"] = config.mqtt.port;
     obj["username"] = config.mqtt.username;
     // Don't expose password
-    obj["topic_prefix"] = config.mqtt.topic_prefix;
-    obj["ha_discovery"] = config.mqtt.ha_discovery;
+    obj["base_topic"] = config.mqtt.base_topic;
+    obj["ha_discovery_enabled"] = config.mqtt.ha_discovery_enabled;
 }
 
 void ApiEndpoints::buildSensorConfigJson(JsonArray& arr) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    for (uint8_t i = 0; i < config.sensor_count; i++) {
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
         JsonObject sensor = arr.add<JsonObject>();
-        sensor["name"] = config.sensors[i].name;
-        sensor["enabled"] = config.sensors[i].enabled;
-        sensor["input_type"] = config.sensors[i].input_type;
-        sensor["pin"] = config.sensors[i].pin;
-        sensor["dry_value"] = config.sensors[i].dry_value;
-        sensor["wet_value"] = config.sensors[i].wet_value;
-        sensor["sample_interval_ms"] = config.sensors[i].sample_interval_ms;
-        sensor["sample_count"] = config.sensors[i].sample_count;
+        sensor["name"] = config.moisture_sensors[i].sensor_name;
+        sensor["enabled"] = config.moisture_sensors[i].enabled;
+        sensor["input_type"] = static_cast<uint8_t>(config.moisture_sensors[i].input_type);
+        sensor["pin"] = config.moisture_sensors[i].adc_pin;
+        sensor["dry_value"] = config.moisture_sensors[i].dry_value;
+        sensor["wet_value"] = config.moisture_sensors[i].wet_value;
+        sensor["sample_delay_ms"] = config.moisture_sensors[i].sample_delay_ms;
+        sensor["reading_samples"] = config.moisture_sensors[i].reading_samples;
     }
 }
 
 void ApiEndpoints::buildRelayConfigJson(JsonArray& arr) {
-    const auto& config = Config.get();
+    const auto& config = Config.getConfig();
 
-    for (uint8_t i = 0; i < config.relay_count; i++) {
+    for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
         JsonObject relay = arr.add<JsonObject>();
-        relay["name"] = config.relays[i].name;
+        relay["name"] = config.relays[i].relay_name;
         relay["enabled"] = config.relays[i].enabled;
-        relay["pin"] = config.relays[i].pin;
+        relay["pin"] = config.relays[i].gpio_pin;
         relay["active_low"] = config.relays[i].active_low;
-        relay["auto_mode"] = config.relays[i].auto_mode;
-        relay["min_on_time_s"] = config.relays[i].min_on_time_s;
-        relay["max_on_time_s"] = config.relays[i].max_on_time_s;
-        relay["cooldown_s"] = config.relays[i].cooldown_s;
+        relay["min_off_time_sec"] = config.relays[i].min_off_time_sec;
+        relay["max_on_time_sec"] = config.relays[i].max_on_time_sec;
+        relay["cooldown_sec"] = config.relays[i].cooldown_sec;
     }
 }
 
 // ============ JSON Parsers ============
 
 bool ApiEndpoints::parseWifiConfig(JsonObject& obj) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     if (!obj["ssid"].isNull()) {
@@ -745,31 +739,11 @@ bool ApiEndpoints::parseWifiConfig(JsonObject& obj) {
         changed = true;
     }
 
-    if (!obj["enabled"].isNull()) {
-        config.wifi.enabled = obj["enabled"];
-        changed = true;
-    }
-
-    if (!obj["ap_mode"].isNull()) {
-        config.wifi.ap_mode = obj["ap_mode"];
-        changed = true;
-    }
-
-    if (!obj["ap_ssid"].isNull()) {
-        strlcpy(config.wifi.ap_ssid, obj["ap_ssid"] | "", sizeof(config.wifi.ap_ssid));
-        changed = true;
-    }
-
-    if (!obj["ap_password"].isNull()) {
-        strlcpy(config.wifi.ap_password, obj["ap_password"] | "", sizeof(config.wifi.ap_password));
-        changed = true;
-    }
-
     return changed;
 }
 
 bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     if (!obj["enabled"].isNull()) {
@@ -777,8 +751,8 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
         changed = true;
     }
 
-    if (!obj["server"].isNull()) {
-        strlcpy(config.mqtt.server, obj["server"] | "", sizeof(config.mqtt.server));
+    if (!obj["broker"].isNull()) {
+        strlcpy(config.mqtt.broker, obj["broker"] | "", sizeof(config.mqtt.broker));
         changed = true;
     }
 
@@ -797,13 +771,13 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
         changed = true;
     }
 
-    if (!obj["topic_prefix"].isNull()) {
-        strlcpy(config.mqtt.topic_prefix, obj["topic_prefix"] | "", sizeof(config.mqtt.topic_prefix));
+    if (!obj["base_topic"].isNull()) {
+        strlcpy(config.mqtt.base_topic, obj["base_topic"] | "", sizeof(config.mqtt.base_topic));
         changed = true;
     }
 
-    if (!obj["ha_discovery"].isNull()) {
-        config.mqtt.ha_discovery = obj["ha_discovery"];
+    if (!obj["ha_discovery_enabled"].isNull()) {
+        config.mqtt.ha_discovery_enabled = obj["ha_discovery_enabled"];
         changed = true;
     }
 
@@ -811,7 +785,7 @@ bool ApiEndpoints::parseMqttConfig(JsonObject& obj) {
 }
 
 bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     size_t index = 0;
@@ -821,33 +795,33 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
         }
 
         if (!sensor["name"].isNull()) {
-            strlcpy(config.sensors[index].name, sensor["name"] | "",
-                    sizeof(config.sensors[index].name));
+            strlcpy(config.moisture_sensors[index].sensor_name, sensor["name"] | "",
+                    sizeof(config.moisture_sensors[index].sensor_name));
             changed = true;
         }
 
         if (!sensor["enabled"].isNull()) {
-            config.sensors[index].enabled = sensor["enabled"];
+            config.moisture_sensors[index].enabled = sensor["enabled"];
             changed = true;
         }
 
         if (!sensor["dry_value"].isNull()) {
-            config.sensors[index].dry_value = sensor["dry_value"];
+            config.moisture_sensors[index].dry_value = sensor["dry_value"];
             changed = true;
         }
 
         if (!sensor["wet_value"].isNull()) {
-            config.sensors[index].wet_value = sensor["wet_value"];
+            config.moisture_sensors[index].wet_value = sensor["wet_value"];
             changed = true;
         }
 
-        if (!sensor["sample_interval_ms"].isNull()) {
-            config.sensors[index].sample_interval_ms = sensor["sample_interval_ms"];
+        if (!sensor["sample_delay_ms"].isNull()) {
+            config.moisture_sensors[index].sample_delay_ms = sensor["sample_delay_ms"];
             changed = true;
         }
 
-        if (!sensor["sample_count"].isNull()) {
-            config.sensors[index].sample_count = sensor["sample_count"];
+        if (!sensor["reading_samples"].isNull()) {
+            config.moisture_sensors[index].reading_samples = sensor["reading_samples"];
             changed = true;
         }
 
@@ -858,7 +832,7 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
 }
 
 bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
-    auto& config = Config.get();
+    auto& config = Config.getConfigMutable();
     bool changed = false;
 
     size_t index = 0;
@@ -868,8 +842,8 @@ bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
         }
 
         if (!relay["name"].isNull()) {
-            strlcpy(config.relays[index].name, relay["name"] | "",
-                    sizeof(config.relays[index].name));
+            strlcpy(config.relays[index].relay_name, relay["name"] | "",
+                    sizeof(config.relays[index].relay_name));
             changed = true;
         }
 
@@ -883,23 +857,18 @@ bool ApiEndpoints::parseRelayConfig(JsonArray& arr) {
             changed = true;
         }
 
-        if (!relay["auto_mode"].isNull()) {
-            config.relays[index].auto_mode = relay["auto_mode"];
+        if (!relay["min_off_time_sec"].isNull()) {
+            config.relays[index].min_off_time_sec = relay["min_off_time_sec"];
             changed = true;
         }
 
-        if (!relay["min_on_time_s"].isNull()) {
-            config.relays[index].min_on_time_s = relay["min_on_time_s"];
+        if (!relay["max_on_time_sec"].isNull()) {
+            config.relays[index].max_on_time_sec = relay["max_on_time_sec"];
             changed = true;
         }
 
-        if (!relay["max_on_time_s"].isNull()) {
-            config.relays[index].max_on_time_s = relay["max_on_time_s"];
-            changed = true;
-        }
-
-        if (!relay["cooldown_s"].isNull()) {
-            config.relays[index].cooldown_s = relay["cooldown_s"];
+        if (!relay["cooldown_sec"].isNull()) {
+            config.relays[index].cooldown_sec = relay["cooldown_sec"];
             changed = true;
         }
 

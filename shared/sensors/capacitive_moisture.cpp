@@ -109,14 +109,14 @@ void DirectAdcInput::configureAdc() {
     analogReadResolution(ESP32_ADC_WIDTH);
 
     // Set attenuation for full 0-3.3V range
-    // ADC_ATTEN_DB_11 gives approximately 0-3.3V input range
+    // ADC_11db gives approximately 0-3.3V input range
     adc_attenuation_t atten;
     switch (_attenuation) {
-        case 0: atten = ADC_ATTEN_DB_0; break;    // 0-1.1V
-        case 1: atten = ADC_ATTEN_DB_2_5; break;  // 0-1.5V
-        case 2: atten = ADC_ATTEN_DB_6; break;    // 0-2.2V
+        case 0: atten = ADC_0db;   break;  // 0-1.1V
+        case 1: atten = ADC_2_5db; break;  // 0-1.5V
+        case 2: atten = ADC_6db;   break;  // 0-2.2V
         case 3:
-        default: atten = ADC_ATTEN_DB_11; break;  // 0-3.3V
+        default: atten = ADC_11db; break;  // 0-3.3V
     }
 
     analogSetPinAttenuation(_pin, atten);

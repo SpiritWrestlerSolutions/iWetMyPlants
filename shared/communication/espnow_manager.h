@@ -370,7 +370,7 @@ private:
 
     // Static callbacks for ESP-NOW
     static void onDataSentStatic(const uint8_t* mac, esp_now_send_status_t status);
-    static void onDataRecvStatic(const esp_now_recv_info_t* info, const uint8_t* data, int len);
+    static void onDataRecvStatic(const uint8_t* mac_addr, const uint8_t* data, int len);
 
     // Instance callbacks
     void onDataSent(const uint8_t* mac, esp_now_send_status_t status);

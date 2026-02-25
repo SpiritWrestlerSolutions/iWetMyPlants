@@ -9,6 +9,18 @@
 
 namespace iwmp {
 
+// Forward declarations for embedded HTML/CSS/JS defined at end of this file
+const char* getIndexHtml();
+const char* getSettingsHtml();
+const char* getWifiSettingsHtml();
+const char* getMqttSettingsHtml();
+const char* getSensorsHtml();
+const char* getCalibrationHtml();
+const char* getRelaysHtml();
+const char* getDevicesHtml();
+const char* getStyleCss();
+const char* getAppJs();
+
 // Global instance
 WebServer& Web = WebServer::getInstance();
 
@@ -70,9 +82,9 @@ bool WebServer::begin(const DeviceIdentity& identity) {
     hostname.toLowerCase();
     if (MDNS.begin(hostname.c_str())) {
         MDNS.addService("iwmp", "tcp", WEB_SERVER_PORT);
-        MDNS.addServiceTxt("iwmp", "tcp", "version",     _identity.firmware_version);
-        MDNS.addServiceTxt("iwmp", "tcp", "device_type", String((int)_identity.device_type).c_str());
-        MDNS.addServiceTxt("iwmp", "tcp", "device_name", _identity.device_name);
+        MDNS.addServiceTxt(String("iwmp"), String("tcp"), String("version"),     String(_identity.firmware_version));
+        MDNS.addServiceTxt(String("iwmp"), String("tcp"), String("device_type"), String((int)_identity.device_type));
+        MDNS.addServiceTxt(String("iwmp"), String("tcp"), String("device_name"), String(_identity.device_name));
         Serial.printf("[Web] mDNS started: %s.local\n", hostname.c_str());
     } else {
         Serial.println("[Web] mDNS failed to start");
@@ -209,17 +221,17 @@ void WebServer::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
                     if (strcmp(type, "set_dry") == 0) {
                         uint8_t sensor = doc["sensor"] | 0;
                         if (_calibration_callback) {
-                            _calibration_callback(sensor, 0);  // 0 = dry
+                            _calibration_callback(sensor, "dry");
                         }
                     } else if (strcmp(type, "set_wet") == 0) {
                         uint8_t sensor = doc["sensor"] | 0;
                         if (_calibration_callback) {
-                            _calibration_callback(sensor, 1);  // 1 = wet
+                            _calibration_callback(sensor, "wet");
                         }
                     } else if (strcmp(type, "save") == 0) {
                         uint8_t sensor = doc["sensor"] | 0;
                         if (_calibration_callback) {
-                            _calibration_callback(sensor, 2);  // 2 = save
+                            _calibration_callback(sensor, "save");
                         }
                     }
                 }
