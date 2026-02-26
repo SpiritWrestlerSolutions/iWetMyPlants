@@ -111,7 +111,7 @@ jobs:
           path: firmware/
           retention-days: 30
 
-      # ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
+# ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
       # Requires repository secrets:
       #   FTP_SERVER   → your FTP host (e.g. ftp.spiritwrestler.ca)
       #   FTP_USERNAME → FTP account username
@@ -126,8 +126,10 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /plants/install/
+          server-dir: /public_html/plants/install/
           local-dir: ./installer/
+          protocol: ftps
+          passive: true
 
       - name: Deploy firmware binaries to /plants/firmware/
         if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
@@ -136,5 +138,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /plants/firmware/
+          server-dir: /public_html/plants/firmware/
           local-dir: ./firmware/
+          protocol: ftps
+          passive: true
