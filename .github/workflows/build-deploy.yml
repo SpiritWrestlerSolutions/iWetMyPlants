@@ -120,7 +120,7 @@ jobs:
         with:
           host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 27
           source: "installer/"
           target: "/public_html/plants/install/"
@@ -132,7 +132,7 @@ jobs:
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 27
           local_path: ./firmware/
           remote_path: /public_html/plants/firmware/
