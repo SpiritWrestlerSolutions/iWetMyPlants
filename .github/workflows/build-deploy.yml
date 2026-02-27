@@ -122,7 +122,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: 27
-          local_path: ./installer/*
+          local_path: ./installer/
           remote_path: /public_html/plants/install/
           sftpargs: "-v"
 
@@ -134,5 +134,5 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: 27
-          local_path: ./firmware/*
+          local_path: ./firmware/
           remote_path: /public_html/plants/firmware/
