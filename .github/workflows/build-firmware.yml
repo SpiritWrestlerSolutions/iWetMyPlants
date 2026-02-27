@@ -120,7 +120,7 @@ jobs:
       # Only runs on pushes to main or tag pushes (not PRs).
 
       - name: Deploy installer to /plants/install/
-        if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -132,7 +132,7 @@ jobs:
        
 
       - name: Deploy firmware binaries to /plants/firmware/
-        if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.FTP_SERVER }}
