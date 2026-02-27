@@ -126,7 +126,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          port: 22
+          port: 27
           local_path: ./installer/*
           remote_path: /public_html/plants/install/
           sftp_only: true
@@ -138,7 +138,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          port: 22
+          port: 27
           local_path: ./firmware/*
           remote_path: /public_html/plants/firmware/
           sftp_only: true
