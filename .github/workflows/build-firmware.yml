@@ -121,24 +121,24 @@ jobs:
 
       - name: Deploy installer to /plants/install/
         if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /public_html/plants/install/
-          local-dir: ./installer/
-          protocol: ftps
-          passive: true
+          port: 22
+          local_path: ./installer/*
+          remote_path: /public_html/plants/install/
+          sftp_only: true
 
       - name: Deploy firmware binaries to /plants/firmware/
         if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && env.FTP_SERVER != ''
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /public_html/plants/firmware/
-          local-dir: ./firmware/
-          protocol: ftps
-          passive: true
+          port: 22
+          local_path: ./firmware/*
+          remote_path: /public_html/plants/firmware/
+          sftp_only: true
