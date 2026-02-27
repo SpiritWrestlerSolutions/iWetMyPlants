@@ -106,6 +106,12 @@ jobs:
           path: firmware/
           retention-days: 30
 
+      - name: Debug installer contents
+        run: |
+          echo "=== installer/ contents ==="
+          ls -la ./installer/
+          find ./installer -type f
+
       # ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
 
       - name: Deploy installer to /plants/install/
