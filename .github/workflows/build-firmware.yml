@@ -111,14 +111,8 @@ jobs:
           path: firmware/
           retention-days: 30
 
-# ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
-      # Requires repository secrets:
-      #   FTP_SERVER   → your FTP host (e.g. ftp.spiritwrestler.ca)
-      #   FTP_USERNAME → FTP account username
-      #   FTP_PASSWORD → FTP account password
-      #
-      # Only runs on pushes to main or tag pushes (not PRs).
-
+      # ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
+  
       - name: Deploy installer to /plants/install/
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
