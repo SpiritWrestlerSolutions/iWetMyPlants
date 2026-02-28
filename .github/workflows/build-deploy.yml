@@ -116,7 +116,7 @@ jobs:
 
       - name: Deploy installer to /plants/install/
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/sftp-action@v0.0.1
         with:
           host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
@@ -125,15 +125,15 @@ jobs:
           source: "installer/"
           target: "/public_html/plants/install/"
           strip_components: 1
-          overwrite: true
-
+       
       - name: Deploy firmware binaries to /plants/firmware/
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        uses: appleboy/sftp-action@v0.0.1
         with:
-          server: ${{ secrets.FTP_SERVER }}
+          host: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 27
-          local_path: ./firmware/
-          remote_path: /public_html/plants/firmware/
+          source: "firmware/"
+          target: "/public_html/plants/firmware/"
+          strip_components: 1
