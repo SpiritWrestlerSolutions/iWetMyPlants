@@ -9,7 +9,9 @@
 
 #include <Arduino.h>
 #include <esp_sleep.h>
+#if SOC_RTCIO_PIN_COUNT > 0
 #include <driver/rtc_io.h>
+#endif
 #include "config_schema.h"
 
 namespace iwmp {

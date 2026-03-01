@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iWetMyPlants — Installer</title>
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+    <style>
+        /* ── CSS variables matching the embedded device UI ── */
+        :root {
+            --primary-color:    #4CAF50;
+            --primary-dark:     #388E3C;
+            --secondary-color:  #2196F3;
+            --danger-color:     #f44336;
+            --warning-color:    #FF9800;
+            --background-color: #f5f5f5;
+            --card-background:  #ffffff;
+            --text-color:       #333333;
+            --text-muted:       #666666;
+            --border-color:     #e0e0e0;
+            --shadow:           0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background-color: #1a1a1a;
+                --card-background:  #2d2d2d;
+                --text-color:       #e0e0e0;
+                --text-muted:       #aaaaaa;
+                --border-color:     #404040;
+                --shadow:           0 2px 4px rgba(0,0,0,0.3);
+            }
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        .header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .header-brand { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.3px; }
+        .header-subtitle {
+            margin-left: auto;
+            font-size: 0.9rem;
+            opacity: 0.85;
+        }
+
+        /* ── Device selector tabs ── */
+        .device-selector {
+            display: flex;
+            background: var(--card-background);
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .device-selector::-webkit-scrollbar { display: none; }
+
+        .device-tab {
+            padding: 0.85rem 1.5rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            border-bottom: 3px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .device-tab:hover  { color: var(--primary-color); }
+        .device-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        /* ── Main layout ── */
+        main {
+            flex: 1;
+            max-width: 720px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--card-background);
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+        .card h2 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 0.6rem;
+        }
+        .card > p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        /* ── Device info card ── */
+        .device-badge {
+            display: inline-block;
+            padding: 0.2rem 0.65rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--primary-color);
+            color: white;
+            margin-bottom: 0.6rem;
+        }
+        #device-description {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+        .spec-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.35rem 1.25rem;
+            font-size: 0.875rem;
+        }
+        .spec-grid dt { color: var(--text-muted); }
+        .spec-grid dd { font-weight: 500; }
+
+        /* ── Form elements ── */
+        .form-group { margin-bottom: 1rem; }
+        .form-group:last-child { margin-bottom: 0; }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.35rem;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            background: var(--card-background);
+            color: var(--text-color);
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        .helper-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.15s, opacity 0.15s;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+
+        .btn-secondary { background: var(--secondary-color); color: white; }
+        .btn-secondary:hover:not(:disabled) { background: #1976D2; }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+        .btn-outline:hover:not(:disabled) { background: var(--primary-color); color: white; }
+
+        .btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+
+        /* ── esp-web-install-button slot ── */
+        esp-web-install-button { display: block; }
+
+        /* ── Progress bar ── */
+        .progress-wrap { display: none; margin-top: 1rem; }
+        .progress-wrap.visible { display: block; }
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 0.35rem;
+        }
+        .progress-track {
+            width: 100%;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.2s;
+        }
+
+        /* ── Status messages ── */
+        .status-msg {
+            display: none;
+            padding: 0.65rem 1rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            margin-top: 0.85rem;
+        }
+        .status-msg.visible { display: block; }
+        .status-msg.success { background: #E8F5E9; color: #2E7D32; }
+        .status-msg.error   { background: #FFEBEE; color: #C62828; }
+        .status-msg.info    { background: #E3F2FD; color: #1565C0; }
+        .status-msg.warning { background: #FFF8E1; color: #E65100; }
+
+        @media (prefers-color-scheme: dark) {
+            .status-msg.success { background: #1B5E20; color: #A5D6A7; }
+            .status-msg.error   { background: #4E0000; color: #FFCDD2; }
+            .status-msg.info    { background: #0D2F6E; color: #BBDEFB; }
+            .status-msg.warning { background: #4E2600; color: #FFCC80; }
+        }
+
+        /* ── Browser note ── */
+        .browser-note {
+            padding: 0.65rem 1rem;
+            background: #FFF8E1;
+            border-left: 3px solid var(--warning-color);
+            border-radius: 0 4px 4px 0;
+            font-size: 0.85rem;
+            color: #5D4037;
+            margin-bottom: 1rem;
+        }
+        @media (prefers-color-scheme: dark) {
+            .browser-note { background: #3E2723; color: #FFCCBC; }
+        }
+
+        /* ── Section divider ── */
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+        }
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        /* ── Version badge ── */
+        .version-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(255,255,255,0.25);
+            color: white;
+            padding: 0.15rem 0.6rem;
+            border-radius: 10px;
+            margin-left: 0.75rem;
+            letter-spacing: 0.03em;
+        }
+
+        /* ── Changelog ── */
+        .changelog-toggle {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 0.875rem;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .changelog-toggle:hover { text-decoration: underline; }
+        .changelog-toggle svg { transition: transform 0.2s; }
+        .changelog-toggle.open svg { transform: rotate(180deg); }
+
+        .changelog-body {
+            display: none;
+            margin-top: 0.85rem;
+        }
+        .changelog-body.visible { display: block; }
+
+        .changelog-entry { margin-bottom: 1rem; }
+        .changelog-entry h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+            color: var(--text-color);
+        }
+        .changelog-entry ul {
+            padding-left: 1.1rem;
+            margin: 0;
+        }
+        .changelog-entry ul li {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.2rem;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 1.25rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+        }
+        .footer a { color: var(--primary-color); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            main { padding: 1rem; }
+            .card { padding: 1.25rem; }
+            .header-subtitle { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <span class="header-brand">
+        iWetMyPlants
+        <span class="version-badge" id="header-version">v2.0.0</span>
+    </span>
+    <span class="header-subtitle">Installer &amp; Updater</span>
+</header>
+
+<nav class="device-selector" role="tablist" aria-label="Device type">
+    <button class="device-tab active" role="tab" data-device="hub">Hub</button>
+    <button class="device-tab" role="tab" data-device="remote">Remote</button>
+    <button class="device-tab" role="tab" data-device="greenhouse">Greenhouse</button>
+</nav>
+
+<main>
+
+    <!-- Device info -->
+    <div class="card" id="device-info-card">
+        <span class="device-badge" id="device-badge">Hub</span>
+        <p id="device-description"></p>
+        <dl class="spec-grid" id="device-specs"></dl>
+        <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-color);">
+            <button class="changelog-toggle" id="changelog-toggle" aria-expanded="false">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <path d="M6 8L1 3h10z"/>
+                </svg>
+                What's new in <span id="toggle-version">v2.0.0</span>
+            </button>
+            <div class="changelog-body" id="changelog-body" aria-hidden="true">
+                <!-- Populated by JavaScript from version.json -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash new device via USB -->
+    <div class="card">
+        <h2>Flash New Device</h2>
+        <p>
+            Connect your ESP32 via USB and click <strong>Connect &amp; Install</strong>.
+            This will erase the board and install fresh firmware.
+            Requires Chrome or Edge on desktop.
+        </p>
+
+        <div class="browser-note" id="serial-warning" style="display:none;">
+            Web Serial is not supported in this browser.
+            Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop) to flash via USB.
+        </div>
+
+        <esp-web-install-button id="install-btn" manifest="manifests/hub.json">
+            <button class="btn btn-primary" slot="activate">Connect &amp; Install</button>
+            <!-- Suppress the built-in unsupported message; we show our own above -->
+            <span slot="unsupported"></span>
+        </esp-web-install-button>
+
+        <div class="status-msg" id="flash-status"></div>
+    </div>
+
+    <div class="section-divider">or update an existing device</div>
+
+    <!-- OTA update for devices already on the network -->
+    <div class="card">
+        <h2>Update via OTA</h2>
+        <p>
+            For devices already running iWetMyPlants firmware and connected to your network.
+            Enter the device IP, select a firmware file, then click <strong>Update Firmware</strong>.
+        </p>
+
+        <div class="browser-note" style="margin-bottom:1rem;">
+            <strong>Note:</strong> Your browser will send this request directly to the device on your local network.
+            The device firmware must serve <code>Access-Control-Allow-Origin: *</code> headers on
+            <code>/api/system/ota</code> for this to work from an external page.
+            If it fails with a CORS error, use the device's own Settings page (at its local IP) to upload firmware instead.
+        </div>
+
+        <div class="form-group">
+            <label for="device-ip">Device IP Address</label>
+            <input type="text" id="device-ip" placeholder="192.168.1.100"
+                   autocomplete="off" spellcheck="false" inputmode="url">
+            <div class="helper-text">
+                Find the IP on your router's DHCP list, or check the Hub's Devices page.
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="ota-file">
+                Firmware File (.bin)
+                <span style="font-weight:400; color:var(--text-muted);">— optional</span>
+            </label>
+            <input type="file" id="ota-file" accept=".bin">
+            <div class="helper-text">
+                Leave blank to use the latest release build for the selected device type.
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-outline" id="ping-btn">Check Connection</button>
+            <button class="btn btn-primary" id="ota-btn">Update Firmware</button>
+        </div>
+
+        <div class="progress-wrap" id="ota-progress">
+            <div class="progress-meta">
+                <span id="progress-label">Uploading&hellip;</span>
+                <span id="progress-pct">0%</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </div>
+
+        <div class="status-msg" id="ota-status"></div>
+    </div>
+
+</main>
+
+<footer class="footer">
+    <a href="https://github.com/SpiritWrestlerSolutions/iWetMyPlants" target="_blank" rel="noopener">
+        iWetMyPlants on GitHub
+    </a>
+    &nbsp;&middot;&nbsp;
+    Installer inspired by <a href="https://install.wled.me" target="_blank" rel="noopener">WLED</a>
+</footer>
+
+<script>
+// ── Version & changelog ───────────────────────────────────────────────────────
+
+(async function loadVersion() {
+    try {
+        const res = await fetch('version.json', { cache: 'no-cache' });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.version) {
+            document.getElementById('header-version').textContent = 'v' + data.version;
+            document.getElementById('toggle-version').textContent  = 'v' + data.version;
+
+            // Update manifests version display (informational only — manifest files
+            // are updated by the CI/CD build process)
+        }
+
+        if (Array.isArray(data.changelog) && data.changelog.length) {
+            const body = document.getElementById('changelog-body');
+            body.innerHTML = data.changelog.map(entry => `
+                <div class="changelog-entry">
+                    <h3>v${entry.version} <span style="font-weight:400;color:var(--text-muted);">&mdash; ${entry.date}</span></h3>
+                    <ul>${entry.notes.map(n => `<li>${n}</li>`).join('')}</ul>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        // version.json not present — silently skip
+    }
+})();
+
+const changelogToggle = document.getElementById('changelog-toggle');
+const changelogBody   = document.getElementById('changelog-body');
+
+changelogToggle.addEventListener('click', () => {
+    const open = changelogBody.classList.toggle('visible');
+    changelogToggle.classList.toggle('open', open);
+    changelogToggle.setAttribute('aria-expanded', open);
+    changelogBody.setAttribute('aria-hidden', !open);
+});
+
+// ── Device definitions ────────────────────────────────────────────────────────
+
+const DEVICES = {
+    hub: {
+        label: 'Hub',
+        description: 'The central coordinator for your iWetMyPlants network. Receives sensor data ' +
+                     'from Remote and Greenhouse nodes via ESP-NOW, bridges to MQTT / Home Assistant, ' +
+                     'and manages a registry of paired devices.',
+        specs: {
+            'Board':        'ESP32 (WROOM / S3)',
+            'Role':         'Gateway & MQTT bridge',
+            'Sensors':      'Up to 8',
+            'Connectivity': 'WiFi + ESP-NOW',
+        },
+        manifest: 'manifests/hub.json',
+    },
+    remote: {
+        label: 'Remote',
+        description: 'A battery-powered single-sensor node designed for ultra-low power consumption. ' +
+                     'Wakes briefly to take a moisture reading, transmits to the Hub via ESP-NOW, ' +
+                     'then returns to deep sleep.',
+        specs: {
+            'Board':        'ESP32-C3 SuperMini',
+            'Role':         'Battery sensor node',
+            'Sensors':      '1 (capacitive moisture)',
+            'Connectivity': 'ESP-NOW only',
+            'Power':        'Deep sleep between readings',
+        },
+        manifest: 'manifests/remote.json',
+    },
+    greenhouse: {
+        label: 'Greenhouse',
+        description: 'A mains-powered multi-sensor node with relay control. Monitors up to 4 sensors ' +
+                     'and drives up to 4 relays with built-in automation rules for environmental control.',
+        specs: {
+            'Board':        'ESP32 (WROOM / S3)',
+            'Role':         'Environmental controller',
+            'Sensors':      'Up to 4',
+            'Relays':       'Up to 4',
+            'Connectivity': 'WiFi + ESP-NOW',
+        },
+        manifest: 'manifests/greenhouse.json',
+    },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let activeDevice = 'hub';
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+
+const tabs         = document.querySelectorAll('.device-tab');
+const installBtn   = document.getElementById('install-btn');
+const badge        = document.getElementById('device-badge');
+const descEl       = document.getElementById('device-description');
+const specsEl      = document.getElementById('device-specs');
+const serialWarn   = document.getElementById('serial-warning');
+const flashStatus  = document.getElementById('flash-status');
+
+const ipInput      = document.getElementById('device-ip');
+const fileInput    = document.getElementById('ota-file');
+const pingBtn      = document.getElementById('ping-btn');
+const otaBtn       = document.getElementById('ota-btn');
+const progressWrap = document.getElementById('ota-progress');
+const progressFill = document.getElementById('progress-fill');
+const progressPct  = document.getElementById('progress-pct');
+const progressLbl  = document.getElementById('progress-label');
+const otaStatus    = document.getElementById('ota-status');
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function setMsg(el, text, type) {
+    el.textContent = text;
+    el.className   = 'status-msg' + (text ? ' visible ' + type : '');
+}
+
+function setProgress(pct, label) {
+    if (pct < 0) {
+        progressWrap.classList.remove('visible');
+        return;
+    }
+    progressWrap.classList.add('visible');
+    progressFill.style.width = pct + '%';
+    progressPct.textContent  = pct + '%';
+    if (label) progressLbl.textContent = label;
+}
+
+function getIp() {
+    return ipInput.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+// ── Device tab switcher ───────────────────────────────────────────────────────
+
+function selectDevice(key) {
+    activeDevice = key;
+    const d = DEVICES[key];
+
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.device === key));
+
+    badge.textContent   = d.label;
+    descEl.textContent  = d.description;
+    specsEl.innerHTML   = Object.entries(d.specs)
+        .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+        .join('');
+
+    installBtn.setAttribute('manifest', d.manifest);
+    setMsg(flashStatus, '', '');
+    setMsg(otaStatus,   '', '');
+    setProgress(-1);
+}
+
+tabs.forEach(tab => tab.addEventListener('click', () => selectDevice(tab.dataset.device)));
+selectDevice('hub');
+
+// ── Web Serial detection ──────────────────────────────────────────────────────
+
+if (!('serial' in navigator)) {
+    serialWarn.style.display = 'block';
+}
+
+// ── Check connection (ping) ───────────────────────────────────────────────────
+
+pingBtn.addEventListener('click', async () => {
+    const ip = getIp();
+    if (!ip) { setMsg(otaStatus, 'Enter a device IP address.', 'error'); return; }
+
+    pingBtn.disabled = true;
+    setMsg(otaStatus, 'Checking connection\u2026', 'info');
+
+    try {
+        const res = await fetch(`http://${ip}/api/system/info`, {
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const info = await res.json();
+        const parts = [
+            info.version   ? `v${info.version}`             : null,
+            info.device_id ? `ID\u00a0${info.device_id}`    : null,
+            info.free_heap ? `Heap\u00a0${info.free_heap}B` : null,
+        ].filter(Boolean).join('\u2002\u00b7\u2002');
+
+        setMsg(otaStatus, `Connected\u2014 ${parts || 'device online'}`, 'success');
+    } catch (e) {
+        setMsg(otaStatus, `Could not reach device: ${e.message}`, 'error');
+    } finally {
+        pingBtn.disabled = false;
+    }
+});
+
+// ── OTA firmware upload ───────────────────────────────────────────────────────
+
+otaBtn.addEventListener('click', async () => {
+    const ip = getIp();
+    if (!ip) { setMsg(otaStatus, 'Enter a device IP address.', 'error'); return; }
+
+    let file = fileInput.files[0] || null;
+
+    // If no file selected, attempt to fetch the pre-built binary for the active device type.
+    // This path will be populated by CI/CD (e.g., GitHub Actions building and committing to firmware/).
+    if (!file) {
+        const firmwarePath = `../firmware/${activeDevice}/firmware.bin`;
+        setMsg(otaStatus, 'No file selected\u2014 fetching latest build\u2026', 'info');
+        setProgress(0, 'Downloading firmware\u2026');
+        try {
+            const res = await fetch(firmwarePath);
+            if (!res.ok) throw new Error(
+                `Could not fetch pre-built firmware (${res.status}). ` +
+                'Select a .bin file manually or build from source.'
+            );
+            const blob = await res.blob();
+            file = new File([blob], `${activeDevice}_firmware.bin`, { type: 'application/octet-stream' });
+            setProgress(-1);
+        } catch (e) {
+            setMsg(otaStatus, e.message, 'error');
+            setProgress(-1);
+            return;
+        }
+    }
+
+    setMsg(otaStatus, '', '');
+    setProgress(0, 'Uploading firmware\u2026');
+    otaBtn.disabled  = true;
+    pingBtn.disabled = true;
+
+    const form = new FormData();
+    form.append('firmware', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `http://${ip}/api/system/ota`);
+    xhr.timeout = 120_000; // 2 minutes
+
+    xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const pct = Math.round((e.loaded / e.total) * 100);
+        setProgress(pct, pct < 100 ? 'Uploading firmware\u2026' : 'Flashing\u2026');
+    };
+
+    xhr.onload = () => {
+        setProgress(-1);
+        if (xhr.status === 200) {
+            setMsg(otaStatus, 'Firmware updated successfully. Device is rebooting\u2026', 'success');
+        } else {
+            setMsg(otaStatus, `Update failed (HTTP\u00a0${xhr.status}): ${xhr.responseText}`, 'error');
+        }
+        otaBtn.disabled  = false;
+        pingBtn.disabled = false;
+    };
+
+    // A network error immediately after a large upload typically means the device
+    // rebooted mid-XHR — treat it as a likely success.
+    xhr.onerror = () => {
+        setProgress(-1);
+        setMsg(
+            otaStatus,
+            'Connection closed \u2014 the device may have rebooted after flashing. ' +
+            'Wait a few seconds, then use Check Connection to confirm.',
+            'warning'
+        );
+        otaBtn.disabled  = false;
+        pingBtn.disabled = false;
+    };
+
+    xhr.ontimeout = () => {
+        setProgress(-1);
+        setMsg(otaStatus, 'Request timed out. Check the device IP and network connection.', 'error');
+        otaBtn.disabled  = false;
+        pingBtn.disabled = false;
+    };
+
+    xhr.send(form);
+});
+</script>
+
+</body>
+</html>

@@ -225,17 +225,17 @@ void WebServer::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
                     if (strcmp(type, "set_dry") == 0) {
                         uint8_t sensor = doc["sensor"] | 0;
                         if (_calibration_callback) {
-                            _calibration_callback(sensor, 0);  // 0 = dry
+                            _calibration_callback(sensor, "dry");
                         }
                     } else if (strcmp(type, "set_wet") == 0) {
                         uint8_t sensor = doc["sensor"] | 0;
                         if (_calibration_callback) {
-                            _calibration_callback(sensor, 1);  // 1 = wet
+                            _calibration_callback(sensor, "wet");
                         }
                     } else if (strcmp(type, "save") == 0) {
                         uint8_t sensor = doc["sensor"] | 0;
                         if (_calibration_callback) {
-                            _calibration_callback(sensor, 2);  // 2 = save
+                            _calibration_callback(sensor, "save");
                         }
                     }
                 }

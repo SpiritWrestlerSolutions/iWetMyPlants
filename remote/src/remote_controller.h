@@ -62,6 +62,12 @@ public:
     // External trigger (e.g. button hold)
     void enterConfigMode();
 
+    /**
+     * @brief Get boot count (number of wakes since power-on)
+     * @return Boot count
+     */
+    uint32_t getBootCount() const { return _power.getBootCount(); }
+
 private:
     RemoteState _state = RemoteState::BOOT;
     uint32_t _state_enter_time = 0;

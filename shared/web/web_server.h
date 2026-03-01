@@ -31,8 +31,8 @@ class ApiEndpoints;
  */
 using StatusCallback = std::function<void(JsonDocument& doc)>;
 using SensorReadCallback = std::function<void(uint8_t index, JsonDocument& doc)>;
-using RelayControlCallback = std::function<bool(uint8_t index, bool state, uint32_t duration)>;
-using CalibrationCallback = std::function<bool(uint8_t sensor_index, uint8_t point)>;
+using RelayControlCallback = std::function<bool(uint8_t index, bool state)>;
+using CalibrationCallback = std::function<bool(uint8_t sensor_index, const char* action)>;
 using ConfigUpdateCallback = std::function<bool(const JsonDocument& doc)>;
 using RebootCallback = std::function<void()>;
 
