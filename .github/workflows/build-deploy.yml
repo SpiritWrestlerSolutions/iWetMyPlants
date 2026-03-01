@@ -133,5 +133,5 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 27
-          local_path: ./firmware/
+          local_path: ./firmware/*
           remote_path: ./public_html/plants/firmware/
