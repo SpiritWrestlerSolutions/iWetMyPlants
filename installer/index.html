@@ -406,7 +406,7 @@
             Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop) to flash via USB.
         </div>
 
-        <esp-web-install-button id="install-btn" manifest="manifests/hub.json">
+        <esp-web-install-button id="install-btn" manifest="install/hub.json">
             <button class="btn btn-primary" slot="activate">Connect &amp; Install</button>
             <!-- Suppress the built-in unsupported message; we show our own above -->
             <span slot="unsupported"></span>
@@ -535,7 +535,7 @@ const DEVICES = {
             'Sensors':      'Up to 8',
             'Connectivity': 'WiFi + ESP-NOW',
         },
-        manifest: 'manifests/hub.json',
+        manifest: 'install/hub.json',
     },
     remote: {
         label: 'Remote',
@@ -549,7 +549,7 @@ const DEVICES = {
             'Connectivity': 'ESP-NOW only',
             'Power':        'Deep sleep between readings',
         },
-        manifest: 'manifests/remote.json',
+        manifest: 'install/remote.json',
     },
     greenhouse: {
         label: 'Greenhouse',
@@ -562,7 +562,7 @@ const DEVICES = {
             'Relays':       'Up to 4',
             'Connectivity': 'WiFi + ESP-NOW',
         },
-        manifest: 'manifests/greenhouse.json',
+        manifest: 'install/greenhouse.json',
     },
 };
 
