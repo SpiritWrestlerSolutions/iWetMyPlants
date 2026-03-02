@@ -6,9 +6,9 @@
     {
       "chipFamily": "ESP32",
       "parts": [
-        { "path": "../firmware/greenhouse/bootloader.bin",  "offset": 4096  },
-        { "path": "../firmware/greenhouse/partitions.bin",  "offset": 32768 },
-        { "path": "../firmware/greenhouse/firmware.bin",    "offset": 65536 }
+        { "path": "/plants/firmware/greenhouse/bootloader.bin",  "offset": 4096  },
+        { "path": "/plants/firmware/greenhouse/partitions.bin",  "offset": 32768 },
+        { "path": "/plants/firmware/greenhouse/firmware.bin",    "offset": 65536 }
       ]
     }
   ]
