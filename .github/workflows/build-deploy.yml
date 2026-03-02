@@ -123,7 +123,7 @@ jobs:
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 27
           local_path: ./installer/
-          remote_path: ./public_html/plants/install/
+          remote_path: ./public_html/plants/
 
       # Deploy each device subdirectory explicitly — glob wildcard (*) with the
       # SFTP action doesn't reliably preserve subdirectory structure, which

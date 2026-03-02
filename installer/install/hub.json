@@ -6,9 +6,9 @@
     {
       "chipFamily": "ESP32",
       "parts": [
-        { "path": "../../firmware/hub/bootloader.bin",    "offset": 4096  },
-        { "path": "../../firmware/hub/partitions.bin",    "offset": 32768 },
-        { "path": "../../firmware/hub/firmware.bin",      "offset": 65536 }
+        { "path": "../firmware/hub/bootloader.bin",    "offset": 4096  },
+        { "path": "../firmware/hub/partitions.bin",    "offset": 32768 },
+        { "path": "../firmware/hub/firmware.bin",      "offset": 65536 }
       ]
     }
   ]

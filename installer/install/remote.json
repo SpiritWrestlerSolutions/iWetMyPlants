@@ -6,9 +6,9 @@
     {
       "chipFamily": "ESP32-C3",
       "parts": [
-        { "path": "../../firmware/remote/bootloader.bin",  "offset": 0     },
-        { "path": "../../firmware/remote/partitions.bin",  "offset": 32768 },
-        { "path": "../../firmware/remote/firmware.bin",    "offset": 65536 }
+        { "path": "../firmware/remote/bootloader.bin",  "offset": 0     },
+        { "path": "../firmware/remote/partitions.bin",  "offset": 32768 },
+        { "path": "../firmware/remote/firmware.bin",    "offset": 65536 }
       ]
     }
   ]
