@@ -722,7 +722,7 @@ otaBtn.addEventListener('click', async () => {
     // If no file selected, attempt to fetch the pre-built binary for the active device type.
     // This path will be populated by CI/CD (e.g., GitHub Actions building and committing to firmware/).
     if (!file) {
-        const firmwarePath = `../firmware/${activeDevice}/firmware.bin`;
+        const firmwarePath = `https://spiritwrestler.ca/plants/firmware/${activeDevice}/firmware.bin`;
         setMsg(otaStatus, 'No file selected\u2014 fetching latest build\u2026', 'info');
         setProgress(0, 'Downloading firmware\u2026');
         try {
