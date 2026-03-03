@@ -354,6 +354,40 @@
             .card { padding: 1.25rem; }
             .header-subtitle { display: none; }
         }
+
+        /* ── Improv WiFi setup steps (Hub only) ── */
+        .setup-steps {
+            padding-left: 1.25rem;
+            margin: 0.85rem 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .setup-steps li {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .setup-steps strong { color: var(--text-color); }
+
+        .fallback-note {
+            margin-top: 0.85rem;
+            padding: 0.6rem 0.9rem;
+            background: #FFF8E1;
+            border-left: 3px solid #F59E0B;
+            border-radius: 0 4px 4px 0;
+            font-size: 0.82rem;
+            color: #5D4037;
+        }
+        @media (prefers-color-scheme: dark) {
+            .fallback-note { background: #3E2723; color: #FFCCBC; }
+        }
+        .fallback-note code {
+            font-family: monospace;
+            background: rgba(0,0,0,0.08);
+            padding: 0.1em 0.3em;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -401,6 +435,14 @@
             Requires Chrome or Edge on desktop.
         </p>
 
+        <!-- Hub-only: step-by-step Improv WiFi guide (shown/hidden by selectDevice) -->
+        <ol class="setup-steps" id="hub-steps" style="display:none;">
+            <li>Click <strong>Connect &amp; Install</strong> and select your Hub's USB port</li>
+            <li>Wait ~30 seconds for firmware to flash and the Hub to reboot</li>
+            <li>A <strong>Configure WiFi</strong> dialog will appear — enter your home network SSID and password</li>
+            <li>The Hub connects and shows an <strong>Open Device</strong> link to its web interface</li>
+        </ol>
+
         <div class="browser-note" id="serial-warning" style="display:none;">
             Web Serial is not supported in this browser.
             Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop) to flash via USB.
@@ -413,6 +455,12 @@
         </esp-web-install-button>
 
         <div class="status-msg" id="flash-status"></div>
+
+        <!-- Hub-only: fallback instructions if the WiFi dialog doesn't appear -->
+        <p class="fallback-note" id="hub-fallback" style="display:none;">
+            No WiFi dialog? Connect another device to the <strong>IWMP-Hub-XXXXXX</strong> WiFi
+            network and visit <code>http://192.168.4.1</code> to configure manually.
+        </p>
     </div>
 
     <div class="section-divider">or update an existing device</div>
@@ -670,6 +718,11 @@ function selectDevice(key) {
     setMsg(flashStatus, '', '');
     setMsg(otaStatus,   '', '');
     setProgress(-1);
+
+    // Show Hub-specific Improv WiFi guidance; hide for Remote / Greenhouse
+    const isHub = (key === 'hub');
+    document.getElementById('hub-steps').style.display    = isHub ? '' : 'none';
+    document.getElementById('hub-fallback').style.display = isHub ? '' : 'none';
 }
 
 tabs.forEach(tab => tab.addEventListener('click', () => selectDevice(tab.dataset.device)));

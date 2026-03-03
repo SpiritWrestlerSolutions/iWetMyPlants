@@ -13,6 +13,7 @@
 #include "mux_moisture.h"
 #include <Wire.h>
 #include "defaults.h"
+#include "watchdog.h"
 
 namespace iwmp {
 
@@ -225,16 +226,14 @@ void HubController::handleApModeState() {
     static bool ap_started = false;
 
     if (!ap_started) {
-        // Generate AP name from device ID
         char ap_ssid[32];
         snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Hub-%s",
                  Config.getDeviceId() + 6);  // Last 6 chars of MAC
 
-        WiFiMgr.begin(WifiConfig{});  // Empty config for AP mode
+        WiFiMgr.begin(WifiConfig{});
         WiFiMgr.startAP(ap_ssid);
         WiFiMgr.startCaptivePortal();
 
-        // Start web server for configuration
         if (!Web.isRunning()) {
             Web.begin(Config.getConfig().identity);
             setupWebRoutes();
@@ -245,13 +244,53 @@ void HubController::handleApModeState() {
         ap_started = true;
     }
 
-    // Process WiFi (for captive portal DNS)
-    WiFiMgr.loop();
+    // Start Improv WiFi Serial provisioning (once, on first AP_MODE entry)
+    if (!_improvStarted) {
+        _improvStarted = true;
+        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
+            WiFiMgr.stopCaptivePortal();
+            WiFiMgr.stopAP();
+            WiFi.mode(WIFI_STA);
+            WiFi.begin(ssid, pwd);
 
-    // Check if user configured WiFi and it's connecting
+            uint32_t t = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
+                Watchdog.feed();
+                delay(100);
+            }
+
+            if (WiFi.status() != WL_CONNECTED) {
+                // Restore AP so the user can still configure via captive portal
+                char ap_ssid[32];
+                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Hub-%s", Config.getDeviceId() + 6);
+                WiFiMgr.startAP(ap_ssid);
+                WiFiMgr.startCaptivePortal();
+                return false;
+            }
+
+            outUrl = "http://" + WiFi.localIP().toString();
+            Config.setWifiCredentials(ssid, pwd);
+            Config.save();
+            return true;
+        });
+        _improv.begin(Serial);
+    }
+
+    // Process WiFi (captive portal DNS) and Improv serial
+    WiFiMgr.loop();
+    _improv.loop();
+
+    // Improv provisioning succeeded — drain TX then reboot into WIFI_CONNECT
+    if (_improv.isProvisioned()) {
+        LOG_I(TAG, "Improv provisioning complete — rebooting");
+        delay(1500);
+        ESP.restart();
+    }
+
+    // Captive portal path: user configured WiFi via the web UI
     const auto& wifi_cfg = Config.getWifi();
-    if (strlen(wifi_cfg.ssid) > 0) {
-        LOG_I(TAG, "WiFi configured, attempting connection");
+    if (strlen(wifi_cfg.ssid) > 0 && !_improv.isProvisioned()) {
+        LOG_I(TAG, "WiFi configured via captive portal, connecting");
         ap_started = false;
         WiFiMgr.stopCaptivePortal();
         WiFiMgr.stopAP();
