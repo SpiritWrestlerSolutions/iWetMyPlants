@@ -521,6 +521,49 @@ changelogToggle.addEventListener('click', () => {
     changelogBody.setAttribute('aria-hidden', !open);
 });
 
+// ── Firmware manifests (inline — bypasses server caching entirely) ────────────
+// Full https:// URLs mean path resolution is always unambiguous regardless of
+// what URL the manifest blob itself is served from.
+
+const _FW = 'https://spiritwrestler.ca/plants/firmware/';
+const _MANIFESTS = {
+    hub: {
+        name: 'iWetMyPlants Hub',
+        new_install_prompt_erase: true,
+        builds: [{ chipFamily: 'ESP32', parts: [
+            { path: _FW + 'hub/bootloader.bin', offset: 4096  },
+            { path: _FW + 'hub/partitions.bin', offset: 32768 },
+            { path: _FW + 'hub/firmware.bin',   offset: 65536 },
+        ]}],
+    },
+    remote: {
+        name: 'iWetMyPlants Remote',
+        new_install_prompt_erase: true,
+        builds: [{ chipFamily: 'ESP32-C3', parts: [
+            { path: _FW + 'remote/bootloader.bin', offset: 0     },
+            { path: _FW + 'remote/partitions.bin', offset: 32768 },
+            { path: _FW + 'remote/firmware.bin',   offset: 65536 },
+        ]}],
+    },
+    greenhouse: {
+        name: 'iWetMyPlants Greenhouse',
+        new_install_prompt_erase: true,
+        builds: [{ chipFamily: 'ESP32', parts: [
+            { path: _FW + 'greenhouse/bootloader.bin', offset: 4096  },
+            { path: _FW + 'greenhouse/partitions.bin', offset: 32768 },
+            { path: _FW + 'greenhouse/firmware.bin',   offset: 65536 },
+        ]}],
+    },
+};
+const _manifestBlobUrls = {};
+function getManifestUrl(key) {
+    if (!_manifestBlobUrls[key]) {
+        const blob = new Blob([JSON.stringify(_MANIFESTS[key])], { type: 'application/json' });
+        _manifestBlobUrls[key] = URL.createObjectURL(blob);
+    }
+    return _manifestBlobUrls[key];
+}
+
 // ── Device definitions ────────────────────────────────────────────────────────
 
 const DEVICES = {
@@ -535,7 +578,6 @@ const DEVICES = {
             'Sensors':      'Up to 8',
             'Connectivity': 'WiFi + ESP-NOW',
         },
-        manifest: 'install/hub.json?v=3',
     },
     remote: {
         label: 'Remote',
@@ -549,7 +591,6 @@ const DEVICES = {
             'Connectivity': 'ESP-NOW only',
             'Power':        'Deep sleep between readings',
         },
-        manifest: 'install/remote.json?v=3',
     },
     greenhouse: {
         label: 'Greenhouse',
@@ -562,7 +603,6 @@ const DEVICES = {
             'Relays':       'Up to 4',
             'Connectivity': 'WiFi + ESP-NOW',
         },
-        manifest: 'install/greenhouse.json?v=3',
     },
 };
 
@@ -626,7 +666,7 @@ function selectDevice(key) {
         .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
         .join('');
 
-    installBtn.setAttribute('manifest', d.manifest);
+    installBtn.setAttribute('manifest', getManifestUrl(key));
     setMsg(flashStatus, '', '');
     setMsg(otaStatus,   '', '');
     setProgress(-1);
