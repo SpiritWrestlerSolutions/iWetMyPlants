@@ -461,6 +461,20 @@
             No WiFi dialog? Connect another device to the <strong>IWMP-Hub-XXXXXX</strong> WiFi
             network and visit <code>http://192.168.4.1</code> to configure manually.
         </p>
+
+        <!-- Remote: post-flash WiFi setup instructions -->
+        <p class="fallback-note" id="remote-fallback" style="display:none;">
+            After flashing, the Remote creates a WiFi network named <strong>IWMP-Remote-XXXXXX</strong>.
+            Connect to it from your phone or computer, then visit <code>http://192.168.4.1</code>
+            to enter your home WiFi credentials.
+        </p>
+
+        <!-- Greenhouse: post-flash WiFi setup instructions -->
+        <p class="fallback-note" id="greenhouse-fallback" style="display:none;">
+            After flashing, the Greenhouse creates a WiFi network named <strong>IWMP-GH-XXXXXX</strong>.
+            Connect to it from your phone or computer, then visit <code>http://192.168.4.1</code>
+            to enter your home WiFi credentials.
+        </p>
     </div>
 
     <div class="section-divider">or update an existing device</div>
@@ -578,6 +592,7 @@ const _MANIFESTS = {
     hub: {
         name: 'iWetMyPlants Hub',
         new_install_prompt_erase: true,
+        improv_wifi_serial_timeout: 30,  // 30s for Hub to boot into AP mode + start Improv
         builds: [{ chipFamily: 'ESP32', parts: [
             { path: _FW + 'hub/bootloader.bin', offset: 4096  },
             { path: _FW + 'hub/partitions.bin', offset: 32768 },
@@ -587,6 +602,7 @@ const _MANIFESTS = {
     remote: {
         name: 'iWetMyPlants Remote',
         new_install_prompt_erase: true,
+        improv_wifi_serial_timeout: 0,   // Remote has no Improv — skip the detection attempt
         builds: [{ chipFamily: 'ESP32-C3', parts: [
             { path: _FW + 'remote/bootloader.bin', offset: 0     },
             { path: _FW + 'remote/partitions.bin', offset: 32768 },
@@ -596,6 +612,7 @@ const _MANIFESTS = {
     greenhouse: {
         name: 'iWetMyPlants Greenhouse',
         new_install_prompt_erase: true,
+        improv_wifi_serial_timeout: 0,   // Greenhouse has no Improv — skip the detection attempt
         builds: [{ chipFamily: 'ESP32', parts: [
             { path: _FW + 'greenhouse/bootloader.bin', offset: 4096  },
             { path: _FW + 'greenhouse/partitions.bin', offset: 32768 },
@@ -719,10 +736,11 @@ function selectDevice(key) {
     setMsg(otaStatus,   '', '');
     setProgress(-1);
 
-    // Show Hub-specific Improv WiFi guidance; hide for Remote / Greenhouse
-    const isHub = (key === 'hub');
-    document.getElementById('hub-steps').style.display    = isHub ? '' : 'none';
-    document.getElementById('hub-fallback').style.display = isHub ? '' : 'none';
+    // Show device-specific post-flash guidance
+    document.getElementById('hub-steps').style.display         = (key === 'hub')        ? '' : 'none';
+    document.getElementById('hub-fallback').style.display      = (key === 'hub')        ? '' : 'none';
+    document.getElementById('remote-fallback').style.display   = (key === 'remote')     ? '' : 'none';
+    document.getElementById('greenhouse-fallback').style.display = (key === 'greenhouse') ? '' : 'none';
 }
 
 tabs.forEach(tab => tab.addEventListener('click', () => selectDevice(tab.dataset.device)));
