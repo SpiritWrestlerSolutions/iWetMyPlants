@@ -71,13 +71,6 @@ jobs:
 
       # ── Update installer metadata ────────────────────────────────────────────
 
-      - name: Stamp version into manifests
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          for f in installer/install/*.json; do
-            sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$f"
-          done
-
       - name: Write version.json
         run: |
           cat > installer/version.json <<EOF
