@@ -413,8 +413,9 @@ const char* getIndexHtml() {
 <div class="si">Heap: <b id="free-heap">--</b> KB</div>
 </div>
 </div>
-<div class="card"><div class="sec-hdr"><h2>Local Sensors</h2><span class="sec-sub" id="s-count"></span></div>
+<div class="card"><div class="sec-hdr"><h2>Local Sensors</h2><span class="sec-sub" id="s-count"></span><button id="btn-take-reading" style="font-size:.75rem;padding:.25rem .65rem;background:#4CAF50;color:#fff;border:none;border-radius:6px;cursor:pointer">Take Reading</button></div>
 <div class="sg" id="sensor-cards"><p style="color:#888">Loading...</p></div>
+<div id="poll-status" style="font-size:.72rem;color:#888;text-align:right;margin-top:.3rem"></div>
 <a href="/sensors" style="display:block;text-align:center;margin-top:.5rem;font-size:.78rem;color:#2196F3;text-decoration:none">Configure sensors &rarr;</a>
 </div>
 <div class="card"><div class="sec-hdr"><h2>Remote Devices</h2><span class="sec-sub" id="rd-count"></span></div>
@@ -435,26 +436,36 @@ function loadStatus(){fetch('/api/status').then(function(r){return r.json()}).th
  var up=document.getElementById('uptime');if(up&&d.uptime_ms!==undefined)up.textContent=fmt(d.uptime_ms);
  var fh=document.getElementById('free-heap');if(fh&&d.free_heap!==undefined)fh.textContent=Math.round(d.free_heap/1024);
 }).catch(function(){})}
-function loadSensors(){fetch('/api/sensors').then(function(r){return r.json()}).then(function(d){
- var c=document.getElementById('sensor-cards'),ss=d.sensors||[];
- var enabled=ss.filter(function(s){return s.enabled});
- var cnt=document.getElementById('s-count');
- cnt.textContent='('+enabled.length+' active)';
- if(!enabled.length){c.innerHTML='<p style="color:#888">No sensors enabled. <a href="/sensors">Add sensors</a></p>';return}
- c.innerHTML=enabled.map(function(s){
-  var p=(s.percent!==undefined)?s.percent:0;
-  var w=s.warning_level||0;
-  var warn=(w>0&&s.percent!==undefined&&p<=w);
-  var hw=(s.input_type===1)?(s.hw_connected?'sc-ok':'sc-err'):'sc-ok';
-  return'<div class="sc'+(warn?' sc-warning':'')+'"><div class="sc-hdr"><b>'+esc(s.name||'Sensor')+'</b>'
-  +'<span class="sc-badge '+(s.ready?hw:'sc-off')+'">'+(s.ready?'OK':'--')+'</span></div>'
-  +'<div class="sc-pct" style="color:'+bc(p)+'">'+(s.percent!==undefined?p:'--')+'<small>'+(s.percent!==undefined?'% moisture':'offline')+'</small></div>'
-  +'<div class="sc-bar"><div class="sc-fill" style="width:'+p+'%;background:'+bc(p)+'"></div></div>'
-  +(warn?'<div class="sc-warn">&#9888; Below '+w+'%</div>':'')
-  +'<div class="sc-row"><span>Raw: '+(s.raw!==undefined?s.raw:'--')+'</span><span>'+['ADC','ADS','Mux'][s.input_type]+'</span></div>'
-  +'</div>'
- }).join('');
-}).catch(function(){})}
+var _cacheData={};
+function fmtAge(sec){if(sec<60)return sec+'s ago';if(sec<3600)return Math.floor(sec/60)+'m ago';return Math.floor(sec/3600)+'h ago'}
+function loadSensors(){
+ Promise.all([fetch('/api/sensors').then(function(r){return r.json()}),fetch('/api/sensors/cache').then(function(r){return r.json()}).catch(function(){return{}})]).then(function(rs){
+  var d=rs[0],cache=rs[1];
+  var cmap={};(cache.sensors||[]).forEach(function(e){cmap[e.index]=e});
+  var polling=cache.polling;
+  var ps=document.getElementById('poll-status');
+  if(ps)ps.textContent=polling?'Reading sensors...':(cache.poll_interval_sec?'Poll every '+fmtAge(cache.poll_interval_sec).replace(' ago',''):'');
+  var c=document.getElementById('sensor-cards'),ss=d.sensors||[];
+  var enabled=ss.filter(function(s){return s.enabled});
+  var cnt=document.getElementById('s-count');
+  cnt.textContent='('+enabled.length+' active)';
+  if(!enabled.length){c.innerHTML='<p style="color:#888">No sensors enabled. <a href="/sensors">Add sensors</a></p>';return}
+  c.innerHTML=enabled.map(function(s){
+   var ce=cmap[s.index]||{};
+   var p=ce.valid?ce.percent:(s.percent!==undefined?s.percent:undefined);
+   var w=s.warning_level||0;
+   var warn=(w>0&&p!==undefined&&p<=w);
+   var hw=(s.input_type===1)?(s.hw_connected?'sc-ok':'sc-err'):'sc-ok';
+   var age=ce.valid?('<span style="font-size:.65rem;color:#aaa">'+fmtAge(ce.age_sec)+'</span>'):'';
+   return'<div class="sc'+(warn?' sc-warning':'')+'"><div class="sc-hdr"><b>'+esc(s.name||'Sensor')+'</b>'
+   +'<span class="sc-badge '+(s.ready?hw:'sc-off')+'">'+(s.ready?'OK':'--')+'</span></div>'
+   +'<div class="sc-pct" style="color:'+bc(p||0)+'">'+(p!==undefined?p:'--')+'<small>'+(p!==undefined?'% moisture':'no reading yet')+'</small></div>'
+   +'<div class="sc-bar"><div class="sc-fill" style="width:'+(p||0)+'%;background:'+bc(p||0)+'"></div></div>'
+   +(warn?'<div class="sc-warn">&#9888; Below '+w+'%</div>':'')
+   +'<div class="sc-row"><span>Raw: '+(ce.raw!==undefined?ce.raw:'--')+'</span>'+age+'</div>'
+   +'</div>'
+  }).join('');
+ }).catch(function(){})}
 function loadDevs(){fetch('/api/devices').then(function(r){return r.json()}).then(function(d){
  var c=document.getElementById('remote-devs'),devs=d.devices||[];
  var cnt=document.getElementById('rd-count');
@@ -474,11 +485,17 @@ function loadDevs(){fetch('/api/devices').then(function(r){return r.json()}).the
 }).catch(function(){})}
 loadStatus();loadSensors();loadDevs();
 setInterval(loadStatus,5000);setInterval(loadSensors,5000);setInterval(loadDevs,5000);
+document.getElementById('btn-take-reading').addEventListener('click',function(){
+ var btn=this;btn.textContent='Reading...';btn.disabled=true;
+ fetch('/api/sensors/poll',{method:'POST'}).then(function(){
+  setTimeout(function(){btn.textContent='Take Reading';btn.disabled=false;loadSensors();},500);
+ }).catch(function(){btn.textContent='Take Reading';btn.disabled=false;});
+});
 </script></body></html>)rawliteral";
 }
 
 const char* getSettingsHtml() {
-    return R"rawliteral(<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Settings - iWetMyPlants</title><link rel="stylesheet" href="/style.css"></head><body><header><a href="/" class="back-link">&larr; Back</a><h1>Settings</h1></header><main><div class="card"><h2>Device Settings</h2><form id="device-form"><div class="form-group"><label for="device-name">Device Name</label><input type="text" id="device-name" name="device_name" maxlength="31"></div><button type="submit" class="btn-primary">Save</button></form></div><div class="card"><h2>Configuration</h2><div class="system-actions"><a href="/settings/wifi" class="btn btn-secondary">WiFi Settings</a><a href="/settings/mqtt" class="btn btn-secondary">MQTT Settings</a></div></div><div class="card"><h2>System</h2><div class="system-actions"><button id="btn-reboot" class="btn btn-warning">Reboot Device</button><button id="btn-reset" class="btn btn-danger">Factory Reset</button></div></div></main><script src="/app.js"></script></body></html>)rawliteral";
+    return R"rawliteral(<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Settings - iWetMyPlants</title><link rel="stylesheet" href="/style.css"></head><body><header><a href="/" class="back-link">&larr; Back</a><h1>Settings</h1></header><main><div class="card"><h2>Device Settings</h2><form id="device-form"><div class="form-group"><label for="device-name">Device Name</label><input type="text" id="device-name" name="device_name" maxlength="31"></div><button type="submit" class="btn-primary">Save</button></form></div><div class="card"><h2>Configuration</h2><div class="system-actions"><a href="/settings/wifi" class="btn btn-secondary">WiFi Settings</a><a href="/settings/mqtt" class="btn btn-secondary">MQTT Settings</a></div></div><div class="card"><h2>Sensor Polling</h2><div class="form-group"><label for="poll-interval">Read sensors every</label><select id="poll-interval" style="width:100%;padding:.6rem;border:1px solid #ddd;border-radius:6px;font-size:.95rem"><option value="5">5 seconds (testing)</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="1800">30 minutes</option><option value="3600">1 hour</option><option value="14400">4 hours</option><option value="28800">8 hours</option><option value="86400">24 hours</option></select></div><div style="display:flex;gap:.6rem"><button id="btn-save-poll" class="btn-primary" style="flex:1">Save</button><button id="btn-take-reading-now" class="btn btn-secondary" style="flex:1">Take Reading Now</button></div><p id="poll-msg" style="margin-top:.5rem;font-size:.82rem;display:none"></p></div><div class="card"><h2>Remote Pairing</h2><p style="font-size:.85rem;color:#666;margin-bottom:.75rem">Copy this Hub\u2019s config to clipboard, then paste it into the Remote\u2019s Settings \u2192 Import Hub Config.</p><button id="btn-copy-espnow" class="btn btn-secondary" style="width:100%">Copy Remote Config</button><textarea id="espnow-json" readonly style="width:100%;margin-top:.6rem;font-family:monospace;font-size:.72rem;padding:.4rem;border:1px solid #ddd;border-radius:4px;resize:none;display:none" rows="4"></textarea></div><div class="card"><h2>System</h2><div class="system-actions"><button id="btn-reboot" class="btn btn-warning">Reboot Device</button><button id="btn-reset" class="btn btn-danger">Factory Reset</button></div></div></main><script src="/app.js"></script></body></html>)rawliteral";
 }
 
 const char* getWifiSettingsHtml() {
@@ -756,7 +773,28 @@ const char* getStyleCss() {
 }
 
 const char* getAppJs() {
-    return R"rawliteral(async function fetchJson(u){return(await fetch(u)).json()}async function postJson(u,d){return(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()}function $(id){return document.getElementById(id)}function formatUptime(ms){const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h+'h '+m+'m '+(s%60)+'s'}async function loadStatus(){try{const d=await fetchJson('/api/status');if($('device-name'))$('device-name').textContent=d.device_id||'Unknown';if($('wifi-status'))$('wifi-status').textContent=(d.wifi&&d.wifi.connected)?'Connected':'Disconnected';if($('uptime'))$('uptime').textContent=(d.uptime_ms!==undefined)?formatUptime(d.uptime_ms):'--';if($('free-heap'))$('free-heap').textContent=(d.free_heap!==undefined)?Math.round(d.free_heap/1024):'--'}catch(e){console.error('loadStatus:',e)}}async function loadSensors(){try{const d=await fetchJson('/api/sensors'),c=$('sensor-readings')||$('sensor-list');if(!c)return;let h='';if(d.sensors)d.sensors.forEach((s,i)=>{h+='<div class="reading"><span class="label">'+(s.name||'Sensor '+(i+1))+'</span><span class="value">'+(s.percent!==undefined?s.percent:'--')+'%</span></div>'});c.innerHTML=h||'<p>No sensors configured</p>'}catch(e){console.error('loadSensors:',e)}}document.addEventListener('DOMContentLoaded',()=>{loadStatus();loadSensors();setInterval(loadStatus,5000);setInterval(loadSensors,10000)});document.querySelectorAll('form').forEach(f=>{f.addEventListener('submit',async e=>{e.preventDefault();try{await postJson('/api/config',Object.fromEntries(new FormData(f)));alert('Settings saved!')}catch(e){alert('Error saving settings')}})});$('btn-reboot')?.addEventListener('click',async()=>{if(confirm('Reboot device?')){await postJson('/api/system/reboot',{});alert('Device rebooting...')}});$('btn-reset')?.addEventListener('click',async()=>{if(confirm('Factory reset? This will erase all settings!')){await postJson('/api/config/reset',{});alert('Device reset. Rebooting...')}});)rawliteral";
+    return R"rawliteral(async function fetchJson(u){return(await fetch(u)).json()}async function postJson(u,d){return(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})).json()}function $(id){return document.getElementById(id)}function formatUptime(ms){const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h+'h '+m+'m '+(s%60)+'s'}async function loadStatus(){try{const d=await fetchJson('/api/status');if($('device-name'))$('device-name').textContent=d.device_id||'Unknown';if($('wifi-status'))$('wifi-status').textContent=(d.wifi&&d.wifi.connected)?'Connected':'Disconnected';if($('uptime'))$('uptime').textContent=(d.uptime_ms!==undefined)?formatUptime(d.uptime_ms):'--';if($('free-heap'))$('free-heap').textContent=(d.free_heap!==undefined)?Math.round(d.free_heap/1024):'--'}catch(e){console.error('loadStatus:',e)}}async function loadSensors(){try{const d=await fetchJson('/api/sensors'),c=$('sensor-readings')||$('sensor-list');if(!c)return;let h='';if(d.sensors)d.sensors.forEach((s,i)=>{h+='<div class="reading"><span class="label">'+(s.name||'Sensor '+(i+1))+'</span><span class="value">'+(s.percent!==undefined?s.percent:'--')+'%</span></div>'});c.innerHTML=h||'<p>No sensors configured</p>'}catch(e){console.error('loadSensors:',e)}}document.addEventListener('DOMContentLoaded',()=>{loadStatus();loadSensors();setInterval(loadStatus,5000);setInterval(loadSensors,10000)});document.querySelectorAll('form').forEach(f=>{f.addEventListener('submit',async e=>{e.preventDefault();try{await postJson('/api/config',Object.fromEntries(new FormData(f)));alert('Settings saved!')}catch(e){alert('Error saving settings')}})});$('btn-reboot')?.addEventListener('click',async()=>{if(confirm('Reboot device?')){await postJson('/api/system/reboot',{});alert('Device rebooting...')}});$('btn-reset')?.addEventListener('click',async()=>{if(confirm('Factory reset? This will erase all settings!')){await postJson('/api/config/reset',{});alert('Device reset. Rebooting...')}});
+async function loadPollInterval(){const sel=$('poll-interval');if(!sel)return;try{const d=await fetchJson('/api/sensors/poll_interval');const v=String(d.interval_sec||60);const opt=[...sel.options].find(o=>o.value===v);if(opt)sel.value=v}catch(e){}}
+$('btn-save-poll')?.addEventListener('click',async()=>{const sel=$('poll-interval'),msg=$('poll-msg');if(!sel)return;try{await postJson('/api/sensors/poll_interval',{interval_sec:parseInt(sel.value)});if(msg){msg.textContent='Saved!';msg.style.color='#2e7d32';msg.style.display='block';setTimeout(()=>msg.style.display='none',2000)}}catch(e){if(msg){msg.textContent='Error saving';msg.style.color='#c62828';msg.style.display='block'}}});
+$('btn-take-reading-now')?.addEventListener('click',async()=>{const msg=$('poll-msg');try{await fetch('/api/sensors/poll',{method:'POST'});if(msg){msg.textContent='Reading started...';msg.style.color='#1565c0';msg.style.display='block';setTimeout(()=>msg.style.display='none',3000)}}catch(e){}});
+loadPollInterval();
+$('btn-copy-espnow')?.addEventListener('click',async()=>{
+  const btn=$('btn-copy-espnow'),ta=$('espnow-json');
+  btn.disabled=true;btn.textContent='Fetching...';
+  try{
+    const d=await fetchJson('/api/espnow/export');
+    const j=JSON.stringify(d);
+    ta.value=j;ta.style.display='block';
+    try{
+      await navigator.clipboard.writeText(j);
+      btn.textContent='Copied!';
+    }catch(e){
+      btn.textContent='Copy from box below';
+      ta.select();
+    }
+    setTimeout(()=>{btn.textContent='Copy Remote Config';btn.disabled=false},3000);
+  }catch(e){btn.textContent='Error';btn.disabled=false}
+});)rawliteral";
 }
 
 } // namespace iwmp

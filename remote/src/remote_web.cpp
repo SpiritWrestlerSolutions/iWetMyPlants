@@ -213,6 +213,12 @@ a.back{display:block;text-align:center;color:#2196F3;text-decoration:none;paddin
 <button class="br" onclick="reboot()">Reboot Device</button>
 </div>
 
+<div class="c"><h2>Import Hub Config</h2>
+<small>On your Hub, go to Settings &rarr; tap <b>Copy Remote Config</b>, then paste here.</small>
+<textarea id="impjson" rows="3" placeholder='{"hub_mac":"AA:BB:CC:DD:EE:FF","channel":6,...}' style="width:100%;font-family:monospace;font-size:.75rem;padding:.4rem;border:1px solid #ddd;border-radius:4px;margin:.5rem 0 .4rem;resize:vertical"></textarea>
+<button class="bs" onclick="importHub()">Import &amp; Reboot</button>
+</div>
+
 <div id="msg"></div>
 <a class="back" href="/">&#8592; Back to Status</a>
 
@@ -303,6 +309,15 @@ async function reboot(){
  catch(e){msg('Error',false)}
 }
 
+async function importHub(){
+var t=$('impjson').value.trim();
+if(!t){msg('Paste config JSON from Hub',false);return}
+try{
+ var r=await fetch('/api/espnow/import',{method:'POST',headers:{'Content-Type':'application/json'},body:t});
+ var d=await r.json();
+ if(d.success){msg(d.message,true)}else{msg(d.error||'Failed',false)}
+}catch(e){msg('Error: '+e.message,false)}}
+
 fetch('/api/config').then(r=>r.json()).then(d=>{
  if(d.wifi){$('ssid').value=d.wifi.ssid||'';$('hub').value=d.wifi.hub_address||''}
  if(d.mqtt){$('mqen').checked=d.mqtt.enabled;$('mqbr').value=d.mqtt.broker||'';
@@ -351,6 +366,7 @@ void RemoteWeb::registerRoutes() {
     // ---- HTML pages ----
 
     _server->on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+        LOG_I(TAG, "GET / from %s", request->client()->remoteIP().toString().c_str());
         request->send(200, "text/html", REMOTE_STATUS_HTML);
     });
 
@@ -412,16 +428,33 @@ void RemoteWeb::registerRoutes() {
         self->handlePostReturnMode(r);
     });
 
-    // ---- Captive portal redirects ----
+    _server->on("/api/espnow/import", HTTP_POST,
+        [](AsyncWebServerRequest* r) {},
+        nullptr,
+        [self](AsyncWebServerRequest* request, uint8_t* data, size_t len,
+               size_t index, size_t total) {
+            if (index != 0) return;
+            self->handlePostEspNowImport(request, data, len);
+        });
 
-    auto redirect = [](AsyncWebServerRequest* r) {
-        r->redirect("http://192.168.4.1/");
+    // ---- Captive portal redirects ----
+    // Use beginResponse() instead of redirect() to include Content-Length: 0.
+    // Android times out (~400ms) waiting for a body if none is declared.
+
+    auto captiveRedirect = [](AsyncWebServerRequest* r) {
+        LOG_I(TAG, "Captive probe: %s %s (host: %s)",
+              r->methodToString(), r->url().c_str(),
+              r->host().c_str());
+        AsyncWebServerResponse* resp = r->beginResponse(302, "text/plain", "");
+        resp->addHeader("Location", "http://192.168.4.1/");
+        resp->addHeader("Cache-Control", "no-cache, no-store");
+        r->send(resp);
     };
-    _server->on("/generate_204", HTTP_GET, redirect);
-    _server->on("/gen_204", HTTP_GET, redirect);
-    _server->on("/hotspot-detect.html", HTTP_GET, redirect);
-    _server->on("/connecttest.txt", HTTP_GET, redirect);
-    _server->on("/ncsi.txt", HTTP_GET, redirect);
+    _server->on("/generate_204",        HTTP_GET, captiveRedirect);
+    _server->on("/gen_204",             HTTP_GET, captiveRedirect);
+    _server->on("/hotspot-detect.html", HTTP_GET, captiveRedirect);
+    _server->on("/connecttest.txt",     HTTP_GET, captiveRedirect);
+    _server->on("/ncsi.txt",            HTTP_GET, captiveRedirect);
     _server->on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest* r) {
         r->send(204);
     });
@@ -429,6 +462,9 @@ void RemoteWeb::registerRoutes() {
     // ---- Catch-all ----
 
     _server->onNotFound([](AsyncWebServerRequest* request) {
+        LOG_I(TAG, "404: %s %s (host: %s)",
+              request->methodToString(), request->url().c_str(),
+              request->host().c_str());
         if (request->url().startsWith("/api/")) {
             request->send(404, "application/json", "{\"error\":\"Not found\"}");
         } else {
@@ -723,6 +759,51 @@ void RemoteWeb::handlePostReboot(AsyncWebServerRequest* request) {
     _ctrl->scheduleReboot(1000);
 }
 
+void RemoteWeb::handlePostEspNowImport(AsyncWebServerRequest* request,
+                                            uint8_t* data, size_t len) {
+    JsonDocument doc;
+    if (deserializeJson(doc, data, len)) {
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+    }
+
+    auto& cfg = Config.getConfigMutable();
+
+    // WiFi credentials
+    const char* ssid = doc["wifi_ssid"] | "";
+    const char* pwd  = doc["wifi_password"] | "";
+    const char* ip   = doc["hub_ip"] | "";
+    if (strlen(ssid) > 0) {
+        strlcpy(cfg.wifi.ssid, ssid, sizeof(cfg.wifi.ssid));
+        strlcpy(cfg.wifi.password, pwd, sizeof(cfg.wifi.password));
+    }
+    if (strlen(ip) > 0) {
+        strlcpy(cfg.wifi.hub_address, ip, sizeof(cfg.wifi.hub_address));
+    }
+
+    // ESP-NOW settings (hub MAC + channel -- used by Low Power mode)
+    const char* mac_str = doc["hub_mac"] | "";
+    if (strlen(mac_str) == 17) {
+        unsigned int m[6];
+        if (sscanf(mac_str, "%02X:%02X:%02X:%02X:%02X:%02X",
+                   &m[0], &m[1], &m[2], &m[3], &m[4], &m[5]) == 6) {
+            for (int i = 0; i < 6; i++) cfg.espnow.hub_mac[i] = (uint8_t)m[i];
+        }
+    }
+    uint8_t channel = doc["channel"] | (uint8_t)1;
+    if (channel < 1 || channel > 14) channel = 1;
+    cfg.espnow.channel = channel;
+    cfg.espnow.enabled = true;
+
+    Config.save();
+
+    LOG_I(TAG, "ESP-NOW import: ssid=%s hub_ip=%s mac=%s ch=%d",
+          ssid, ip, mac_str, channel);
+
+    request->send(200, "application/json",
+        "{\"success\":true,\"message\":\"Config imported! Rebooting...\"}");
+    _ctrl->scheduleReboot(1500);
+}
 void RemoteWeb::handlePostReturnMode(AsyncWebServerRequest* request) {
     request->send(200, "application/json",
         "{\"success\":true,\"message\":\"Returning to configured mode...\"}");

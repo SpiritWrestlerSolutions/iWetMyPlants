@@ -28,6 +28,13 @@ static constexpr const char* TAG = "WiFi";
 bool WifiManager::begin(const WifiConfig& config) {
     _config = config;
 
+    // Disable credential auto-persistence — we manage credentials in our NVS.
+    // Without this the Arduino WiFi library may attempt to auto-reconnect to
+    // previously stored networks, putting the radio in AP+STA mode and
+    // causing STA scanning to steal the channel from the AP beacons.
+    WiFi.persistent(false);
+    WiFi.setAutoReconnect(false);
+
     // Only register event handler once
     if (!s_instance) {
         WiFi.onEvent(onWiFiEvent);
@@ -107,52 +114,35 @@ uint8_t WifiManager::getCurrentChannel() {
 }
 
 bool WifiManager::startAP(const char* ssid, const char* password) {
-    // If already connected as STA, switch to AP+STA mode
-    if (_state == WifiState::CONNECTED) {
-        WiFi.mode(WIFI_AP_STA);
-    } else {
-        WiFi.mode(WIFI_AP);
-    }
+    // Channel 6 — centre of the 2.4 GHz band, universally visible on all
+    // regulatory domains.
+    static constexpr uint8_t AP_CHANNEL = 6;
 
-    // Give WiFi driver time to initialize AP interface — ESP32-C3
-    // can fail softAP() if called too soon after mode switch.
-    delay(100);
-
-    bool result = false;
-    static constexpr int MAX_AP_RETRIES = 3;
-
-    for (int attempt = 1; attempt <= MAX_AP_RETRIES; attempt++) {
-        if (password && strlen(password) >= 8) {
-            result = WiFi.softAP(ssid, password);
-        } else {
-            result = WiFi.softAP(ssid);
-        }
-
-        if (result) {
-            break;
-        }
-
-        LOG_W(TAG, "softAP attempt %d/%d failed, retrying...", attempt, MAX_AP_RETRIES);
-        delay(500);
-    }
-
-    // NOTE: We intentionally do NOT call WiFi.softAPConfig() here.
-    // The default softAP IP is already 192.168.4.1/24 with DHCP enabled.
-    // Calling softAPConfig() stops and restarts the DHCP server, which
-    // can cause clients to hang on "Obtaining IP address" if they send
-    // a DHCP request during the restart window.
-
+    // Let softAP() handle mode/netif setup internally.  Calling WiFi.mode()
+    // first causes a STA→AP driver restart on C3 that silently breaks the AP.
+    bool result = WiFi.softAP(ssid,
+                              (password && strlen(password) >= 8) ? password : nullptr,
+                              AP_CHANNEL);
     if (result) {
-        // Disable modem sleep in AP mode — keeps radio responsive to
-        // client requests. On single-core ESP32-C3 the default power
-        // save can starve the AP interface, causing page-load timeouts.
-        esp_wifi_set_ps(WIFI_PS_NONE);
+        // Explicitly configure AP IP/gateway/subnet after softAP().
+        // On ESP32-C3, omitting this call leaves the DHCP server in an
+        // uninitialised state — clients associate but never receive an IP.
+        WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
 
+        // Disable modem sleep so beacons are never gated
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);
+        delay(200);  // settle before DNS/HTTP bind
+
+        wifi_second_chan_t sec;
+        uint8_t ch = 0;
+        esp_wifi_get_channel(&ch, &sec);
+        LOG_I(TAG, "AP started: %s @ %s ch=%u txpwr=%d (free heap: %u)",
+              ssid, WiFi.softAPIP().toString().c_str(),
+              ch, WiFi.getTxPower(), ESP.getFreeHeap());
         _state = WifiState::AP_MODE;
-        LOG_I(TAG, "AP started: %s @ %s (free heap: %u)",
-              ssid, WiFi.softAPIP().toString().c_str(), ESP.getFreeHeap());
     } else {
-        LOG_E(TAG, "Failed to start AP after %d attempts", MAX_AP_RETRIES);
+        LOG_E(TAG, "softAP failed");
     }
 
     return result;
@@ -331,6 +321,10 @@ void WifiManager::onWiFiEvent(WiFiEvent_t event) {
 
         case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
             LOG_I(TAG, "Client connected to AP");
+            break;
+
+        case ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED:
+            LOG_I(TAG, "Client got DHCP lease (IP assigned)");
             break;
 
         case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:

@@ -16,6 +16,9 @@ static const char* TAG = "main";
 
 void setup() {
     Serial.begin(115200);
+    // Non-blocking CDC writes — prevents DNS/loop stall when serial monitor
+    // is not open (each blocked write costs 100 ms on ESP32-C3 USB CDC)
+    Serial.setTxTimeoutMs(0);
 
     // Minimal delay for serial - we want fast wake
     delay(10);

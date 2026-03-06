@@ -16,6 +16,7 @@
 #include "power_modes.h"
 #include "sensor_interface.h"
 #include "config_schema.h"
+#include "improv_serial.h"
 
 namespace iwmp {
 
@@ -107,6 +108,10 @@ private:
 
     // One-shot flag per state (reset on state entry)
     bool _state_initialized = false;
+
+    // Improv WiFi Serial provisioning
+    ImprovSerial _improv;
+    bool _improvStarted = false;
 
     // Timing
     static constexpr uint32_t SENSOR_READ_INTERVAL_MS = 5000;

@@ -18,6 +18,7 @@
 #include "sensor_interface.h"
 #include "message_types.h"
 #include "improv_serial.h"
+#include <Preferences.h>
 
 namespace iwmp {
 
@@ -132,6 +133,29 @@ private:
     std::unique_ptr<MoistureSensor> _local_sensors[IWMP_MAX_SENSORS];
     uint8_t _local_sensor_count = 0;
 
+    // Sensor reading cache — filled by background sequential polling
+    struct SensorCache {
+        uint16_t raw = 0;
+        uint8_t percent = 0;
+        uint32_t last_read_ms = 0;  // millis() when last read completed
+        bool valid = false;
+    };
+    SensorCache _sensor_cache[IWMP_MAX_SENSORS];
+
+    // Background polling state machine
+    enum class PollPhase : uint8_t { IDLE, SAMPLING };
+    PollPhase _poll_phase = PollPhase::IDLE;
+    uint8_t   _poll_idx = 0;           // Sensor currently being polled
+    uint8_t   _poll_sample_count = 0;  // Samples taken so far for current sensor
+    uint32_t  _poll_accumulator = 0;   // Running sum for averaging
+    uint32_t  _poll_last_sample_ms = 0;
+    uint32_t  _poll_cycle_start_ms = 0;
+    uint32_t  _poll_interval_ms = 60000; // Loaded from Preferences; default 60 s
+    bool      _poll_force = false;     // True = take reading immediately
+
+    static constexpr uint8_t  POLL_SAMPLES          = 10;
+    static constexpr uint32_t POLL_SAMPLE_INTERVAL_MS = 500; // 10 samples × 500 ms = 5 s/sensor
+
     // Timing
     uint32_t _last_publish_time = 0;
     uint32_t _last_device_check_time = 0;
@@ -166,6 +190,9 @@ private:
      * @brief Process local sensors
      */
     void processLocalSensors();
+    void doBackgroundPoll();
+    void loadPollInterval();
+    void savePollInterval(uint32_t interval_sec);
 
     /**
      * @brief Select sensor for calibration

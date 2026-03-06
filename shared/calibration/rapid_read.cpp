@@ -137,18 +137,15 @@ void RapidReadServer::onWebSocketEvent(AsyncWebSocket* server,
     switch (type) {
         case WS_EVT_CONNECT:
             LOG_I(TAG, "WebSocket client connected: %u", client->id());
-            // Send initial status
+            // Send initial status — stack buffer, no heap allocation
             {
-                JsonDocument doc;
-                doc["type"] = "status";
-                doc["active"] = _active;
-                doc["sensor"] = _sensor ? _sensor->getName() : "none";
-                doc["rate"] = _sample_rate;
-                doc["window"] = _averaging_window;
-
-                String json;
-                serializeJson(doc, json);
-                client->text(json);
+                char resp[160];
+                snprintf(resp, sizeof(resp),
+                         "{\"type\":\"status\",\"active\":%s,\"sensor\":\"%s\",\"rate\":%u,\"window\":%u}",
+                         _active ? "true" : "false",
+                         _sensor ? _sensor->getName() : "none",
+                         _sample_rate, _averaging_window);
+                client->text(resp);
             }
             break;
 
@@ -194,66 +191,38 @@ void RapidReadServer::handleMessage(AsyncWebSocketClient* client, uint8_t* data,
         return;
     }
 
-    // Handle commands
+    // Handle commands — all responses use stack char buffers to avoid heap churn
+    char resp[192];
     if (strcmp(cmd, "start") == 0) {
         start();
-
-        // Send confirmation
-        JsonDocument response;
-        response["type"] = "started";
-        response["rate"] = _sample_rate;
-
-        String json;
-        serializeJson(response, json);
-        client->text(json);
+        snprintf(resp, sizeof(resp), "{\"type\":\"started\",\"rate\":%u}", _sample_rate);
+        client->text(resp);
     }
     else if (strcmp(cmd, "stop") == 0) {
         stop();
-
-        JsonDocument response;
-        response["type"] = "stopped";
-
-        String json;
-        serializeJson(response, json);
-        client->text(json);
+        client->text("{\"type\":\"stopped\"}");
     }
     else if (strcmp(cmd, "rate") == 0) {
         uint16_t rate = doc["value"] | 10;
         setSampleRate(rate);
-
-        JsonDocument response;
-        response["type"] = "rate_set";
-        response["rate"] = _sample_rate;
-
-        String json;
-        serializeJson(response, json);
-        client->text(json);
+        snprintf(resp, sizeof(resp), "{\"type\":\"rate_set\",\"rate\":%u}", _sample_rate);
+        client->text(resp);
     }
     else if (strcmp(cmd, "window") == 0) {
         uint8_t window = doc["value"] | 5;
         setAveragingWindow(window);
-
-        JsonDocument response;
-        response["type"] = "window_set";
-        response["window"] = _averaging_window;
-
-        String json;
-        serializeJson(response, json);
-        client->text(json);
+        snprintf(resp, sizeof(resp), "{\"type\":\"window_set\",\"window\":%u}", _averaging_window);
+        client->text(resp);
     }
     else if (strcmp(cmd, "status") == 0) {
-        JsonDocument response;
-        response["type"] = "status";
-        response["active"] = _active;
-        response["sensor"] = _sensor ? _sensor->getName() : "none";
-        response["rate"] = _sample_rate;
-        response["window"] = _averaging_window;
-        response["average"] = getCurrentAverage();
-        response["percent"] = getCurrentPercent();
-
-        String json;
-        serializeJson(response, json);
-        client->text(json);
+        snprintf(resp, sizeof(resp),
+                 "{\"type\":\"status\",\"active\":%s,\"sensor\":\"%s\","
+                 "\"rate\":%u,\"window\":%u,\"average\":%u,\"percent\":%u}",
+                 _active ? "true" : "false",
+                 _sensor ? _sensor->getName() : "none",
+                 _sample_rate, _averaging_window,
+                 getCurrentAverage(), getCurrentPercent());
+        client->text(resp);
     }
 }
 
@@ -262,19 +231,12 @@ void RapidReadServer::broadcastReading(uint16_t raw, uint16_t average, uint8_t p
         return;
     }
 
-    // Build JSON message
-    JsonDocument doc;
-    doc["type"] = "reading";
-    doc["raw"] = raw;
-    doc["avg"] = average;
-    doc["pct"] = percent;
-    doc["ts"] = millis();
-
-    String json;
-    serializeJson(doc, json);
-
-    // Broadcast to all clients
-    _ws->textAll(json);
+    // Stack buffer — no heap allocation on the hot path (called up to 10x/sec)
+    char buf[80];
+    snprintf(buf, sizeof(buf),
+             "{\"type\":\"reading\",\"raw\":%u,\"avg\":%u,\"pct\":%u,\"ts\":%lu}",
+             raw, average, percent, (unsigned long)millis());
+    _ws->textAll(buf);
 }
 
 uint16_t RapidReadServer::calculateAverage() const {

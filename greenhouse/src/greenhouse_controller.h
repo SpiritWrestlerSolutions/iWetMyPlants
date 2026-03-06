@@ -18,6 +18,7 @@
 #include "dht_sensor.h"
 #include "sht_sensor.h"
 #include "message_types.h"
+#include "improv_serial.h"
 
 namespace iwmp {
 
@@ -147,6 +148,10 @@ private:
     uint32_t _last_sensor_read_time = 0;
     uint32_t _last_publish_time = 0;
     uint32_t _state_enter_time = 0;
+
+    // Improv WiFi Serial provisioning
+    ImprovSerial _improv;
+    bool _improvStarted = false;
 
     static constexpr uint32_t SENSOR_READ_INTERVAL_MS = 10000;
     static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;

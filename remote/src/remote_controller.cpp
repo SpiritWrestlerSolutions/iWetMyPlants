@@ -20,6 +20,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <esp_mac.h>
 #include <esp_wifi.h>
 
@@ -78,11 +79,13 @@ void RemoteController::begin() {
                 // First boot in Low Power mode â€” enter Standalone for initial setup
                 LOG_I(TAG, "First boot in Low Power mode â€” Standalone for setup");
                 enterState(RemoteState::STANDALONE);
+                handleStandalone();  // start AP in setup(), not deferred to loop()
             }
             break;
 
         case RemoteMode::STANDALONE:
             enterState(RemoteState::STANDALONE);
+            handleStandalone();  // start AP in setup(), not deferred to loop()
             break;
 
         case RemoteMode::WIFI:
@@ -90,6 +93,7 @@ void RemoteController::begin() {
             const auto& wifi = Config.getWifi();
             if (strlen(wifi.ssid) == 0) {
                 enterState(RemoteState::CONFIG_MODE);
+                handleConfigMode();  // start AP in setup(), not deferred to loop()
             } else {
                 enterState(RemoteState::CONNECTING);
             }
@@ -152,7 +156,46 @@ void RemoteController::handleConfigMode() {
               ap_ssid, WiFiMgr.getAPIP().toString().c_str(), ESP.getFreeHeap());
     }
 
+    // Start Improv WiFi Serial provisioning (once, on first CONFIG_MODE entry)
+    if (!_improvStarted) {
+        _improvStarted = true;
+        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
+            WiFiMgr.stopCaptivePortal();
+            WiFiMgr.stopAP();
+            WiFi.mode(WIFI_STA);
+            WiFi.begin(ssid, pwd);
+
+            uint32_t t = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
+                delay(100);
+            }
+
+            if (WiFi.status() != WL_CONNECTED) {
+                // Restore AP so user can still configure via captive portal
+                char ap_ssid[32];
+                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Remote-%s", Config.getDeviceId() + 6);
+                WiFiMgr.startAP(ap_ssid);
+                WiFiMgr.startCaptivePortal();
+                return false;
+            }
+
+            outUrl = "http://" + WiFi.localIP().toString();
+            Config.setWifiCredentials(ssid, pwd);
+            Config.save();
+            return true;
+        });
+        _improv.begin(Serial);
+    }
+
     WiFiMgr.loop();
+    _improv.loop();
+
+    // Improv provisioning succeeded — drain TX then reboot into CONNECTING
+    if (_improv.isProvisioned()) {
+        LOG_I(TAG, "Improv provisioning complete — rebooting");
+        delay(1500);
+        ESP.restart();
+    }
 }
 
 void RemoteController::handleConnecting() {
@@ -198,6 +241,19 @@ void RemoteController::handleRunning() {
         const auto& pwr = Config.getPower();
         if (pwr.wake_on_button && pwr.wake_button_pin > 0) {
             pinMode(pwr.wake_button_pin, INPUT_PULLUP);
+        }
+
+        // Start mDNS so the device is reachable at iwmp-remote-XXXXXX.local
+        {
+            char mdns_name[32];
+            snprintf(mdns_name, sizeof(mdns_name), "iwmp-remote-%s",
+                     Config.getDeviceId() + 6);
+            if (MDNS.begin(mdns_name)) {
+                MDNS.addService("http", "tcp", 80);
+                LOG_I(TAG, "mDNS: %s.local", mdns_name);
+            } else {
+                LOG_W(TAG, "mDNS start failed");
+            }
         }
 
         _state_initialized = true;

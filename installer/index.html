@@ -442,6 +442,18 @@
             <li>A <strong>Configure WiFi</strong> dialog will appear â€” enter your home network SSID and password</li>
             <li>The Hub connects and shows an <strong>Open Device</strong> link to its web interface</li>
         </ol>
+        <ol class="setup-steps" id="remote-steps" style="display:none;">
+            <li>Click <strong>Connect &amp; Install</strong> and select your Remote's USB port</li>
+            <li>Wait ~30 seconds for firmware to flash and the Remote to reboot</li>
+            <li>A <strong>Configure WiFi</strong> dialog will appear — enter your home network SSID and password</li>
+            <li>The Remote connects and shows an <strong>Open Device</strong> link to its web interface</li>
+        </ol>
+        <ol class="setup-steps" id="greenhouse-steps" style="display:none;">
+            <li>Click <strong>Connect &amp; Install</strong> and select your Greenhouse's USB port</li>
+            <li>Wait ~30 seconds for firmware to flash and the Greenhouse to reboot</li>
+            <li>A <strong>Configure WiFi</strong> dialog will appear — enter your home network SSID and password</li>
+            <li>The Greenhouse connects and shows an <strong>Open Device</strong> link to its web interface</li>
+        </ol>
 
         <div class="browser-note" id="serial-warning" style="display:none;">
             Web Serial is not supported in this browser.
@@ -737,9 +749,11 @@ function selectDevice(key) {
     setProgress(-1);
 
     // Show device-specific post-flash guidance
-    document.getElementById('hub-steps').style.display         = (key === 'hub')        ? '' : 'none';
-    document.getElementById('hub-fallback').style.display      = (key === 'hub')        ? '' : 'none';
-    document.getElementById('remote-fallback').style.display   = (key === 'remote')     ? '' : 'none';
+    document.getElementById('hub-steps').style.display           = (key === 'hub')        ? '' : 'none';
+    document.getElementById('hub-fallback').style.display        = (key === 'hub')        ? '' : 'none';
+    document.getElementById('remote-steps').style.display        = (key === 'remote')     ? '' : 'none';
+    document.getElementById('remote-fallback').style.display     = (key === 'remote')     ? '' : 'none';
+    document.getElementById('greenhouse-steps').style.display    = (key === 'greenhouse') ? '' : 'none';
     document.getElementById('greenhouse-fallback').style.display = (key === 'greenhouse') ? '' : 'none';
 }
 

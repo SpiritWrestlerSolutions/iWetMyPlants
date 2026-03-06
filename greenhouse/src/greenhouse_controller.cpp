@@ -249,14 +249,54 @@ void GreenhouseController::handleApModeState() {
         ap_started = true;
     }
 
+    // Start Improv WiFi Serial provisioning (once, on first AP_MODE entry)
+    if (!_improvStarted) {
+        _improvStarted = true;
+        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
+            WiFiMgr.stopCaptivePortal();
+            WiFiMgr.stopAP();
+            WiFi.mode(WIFI_STA);
+            WiFi.begin(ssid, pwd);
+
+            uint32_t t = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
+                Watchdog.feed();
+                delay(100);
+            }
+
+            if (WiFi.status() != WL_CONNECTED) {
+                // Restore AP so user can still configure via captive portal
+                char ap_ssid[32];
+                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-GH-%s", Config.getDeviceId() + 6);
+                WiFiMgr.startAP(ap_ssid);
+                WiFiMgr.startCaptivePortal();
+                return false;
+            }
+
+            outUrl = "http://" + WiFi.localIP().toString();
+            Config.setWifiCredentials(ssid, pwd);
+            Config.save();
+            return true;
+        });
+        _improv.begin(Serial);
+    }
+
     WiFiMgr.loop();
+    _improv.loop();
 
     // Still update relays even in AP mode
     _relays.update();
 
-    // Check if WiFi configured
+    // Improv provisioning succeeded — drain TX then reboot
+    if (_improv.isProvisioned()) {
+        LOG_I(TAG, "Improv provisioning complete — rebooting");
+        delay(1500);
+        ESP.restart();
+    }
+
+    // Captive portal path: user configured WiFi via the web UI
     const auto& wifi_cfg = Config.getWifi();
-    if (strlen(wifi_cfg.ssid) > 0) {
+    if (strlen(wifi_cfg.ssid) > 0 && !_improv.isProvisioned()) {
         LOG_I(TAG, "WiFi configured, transitioning...");
         ap_started = false;
         WiFiMgr.stopCaptivePortal();

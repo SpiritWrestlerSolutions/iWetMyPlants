@@ -12,6 +12,7 @@
 #include "sensor_interface.h"
 #include "mux_moisture.h"
 #include <Wire.h>
+#include <Preferences.h>
 #include "defaults.h"
 #include "watchdog.h"
 
@@ -299,6 +300,15 @@ void HubController::handleApModeState() {
 }
 
 void HubController::handleOperationalState() {
+    // Load poll interval from NVS on first entry
+    static bool poll_interval_loaded = false;
+    if (!poll_interval_loaded) {
+        poll_interval_loaded = true;
+        loadPollInterval();
+        // Kick off an initial poll immediately
+        _poll_force = true;
+    }
+
     // Process all subsystems
     WiFiMgr.loop();
 
@@ -324,6 +334,9 @@ void HubController::handleOperationalState() {
     if (EspNow.isInitialized()) {
         EspNow.update();
     }
+
+    // Background sensor polling (sequential, non-blocking)
+    doBackgroundPoll();
 
     // Check device timeouts periodically
     if ((millis() - _last_device_check_time) > DEVICE_CHECK_INTERVAL_MS) {
@@ -656,10 +669,16 @@ void HubController::setupWebRoutes() {
     );
 
     ApiEndpoints::onSensorData([this](uint8_t index, uint16_t& raw, uint8_t& percent) -> bool {
-        // Return local sensor data if available
-        if (index < IWMP_MAX_SENSORS && _local_sensors[index]) {
-            raw = _local_sensors[index]->readRaw();
-            percent = _local_sensors[index]->readPercent();
+        // Return cached values (populated by background doBackgroundPoll())
+        if (index < IWMP_MAX_SENSORS && _sensor_cache[index].valid) {
+            raw     = _sensor_cache[index].raw;
+            percent = _sensor_cache[index].percent;
+            return true;
+        }
+        // Sensor exists but cache not yet populated — return last_raw as a hint
+        if (index < IWMP_MAX_SENSORS && _local_sensors[index] && _local_sensors[index]->isReady()) {
+            raw     = 0;
+            percent = 0;
             return true;
         }
         return false;
@@ -706,6 +725,80 @@ void HubController::setupWebRoutes() {
             }
         }
         return false;
+    });
+
+    // POST /api/sensors/poll — force an immediate sensor reading cycle
+    Web.addRoute("/api/sensors/poll", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        _poll_force = true;
+        ApiEndpoints::sendSuccess(request, "Poll started");
+    });
+
+    // GET /api/sensors/poll_interval — return current interval in seconds
+    Web.addRoute("/api/sensors/poll_interval", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        doc["interval_sec"] = _poll_interval_ms / 1000UL;
+        ApiEndpoints::sendJson(request, doc);
+    });
+
+    // POST /api/sensors/poll_interval — set interval {"interval_sec": N}
+    Web.addRouteWithBody("/api/sensors/poll_interval", HTTP_POST,
+        [this](AsyncWebServerRequest* request) { /* handled in body callback */ },
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            DeserializationError err = deserializeJson(doc, data, len);
+            if (err || !doc["interval_sec"].is<uint32_t>()) {
+                ApiEndpoints::sendError(request, 400, "Bad request");
+                return;
+            }
+            uint32_t sec = doc["interval_sec"].as<uint32_t>();
+            if (sec < 5) sec = 5;  // floor: 5 s
+            savePollInterval(sec);
+            ApiEndpoints::sendSuccess(request, "Poll interval updated");
+        }
+    );
+
+    // GET /api/sensors/cache — return cached readings with timestamps
+    Web.addRoute("/api/sensors/cache", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        uint32_t now = millis();
+        JsonDocument doc;
+        JsonArray arr = doc["sensors"].to<JsonArray>();
+        for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+            if (!_local_sensors[i]) continue;
+            JsonObject obj = arr.add<JsonObject>();
+            obj["index"]   = i;
+            obj["valid"]   = _sensor_cache[i].valid;
+            obj["raw"]     = _sensor_cache[i].raw;
+            obj["percent"] = _sensor_cache[i].percent;
+            obj["age_sec"] = _sensor_cache[i].valid
+                                ? (now - _sensor_cache[i].last_read_ms) / 1000UL
+                                : 0;
+        }
+        doc["poll_interval_sec"] = _poll_interval_ms / 1000UL;
+        doc["polling"]           = (_poll_phase == PollPhase::SAMPLING);
+        ApiEndpoints::sendJson(request, doc);
+    });
+
+    // GET /api/espnow/export � export hub config so a Remote can import it in one step
+    Web.addRoute("/api/espnow/export", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        char mac_str[18];
+        snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+        const auto& wifi_cfg = Config.getWifi();
+        JsonDocument doc;
+        doc["hub_mac"]       = mac_str;
+        doc["channel"]       = (int)WiFiMgr.getCurrentChannel();
+        doc["wifi_ssid"]     = wifi_cfg.ssid;
+        doc["wifi_password"] = wifi_cfg.password;
+        doc["hub_ip"]        = WiFi.localIP().toString();
+
+        String json;
+        serializeJson(doc, json);
+        AsyncWebServerResponse* resp = request->beginResponse(200, "application/json", json);
+        resp->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(resp);
     });
 
     LOG_I(TAG, "Web routes configured");
@@ -772,6 +865,115 @@ void HubController::selectSensorForCalibration(uint8_t index) {
     if (index < IWMP_MAX_SENSORS && _local_sensors[index]) {
         RapidRead.setSensor(_local_sensors[index].get());
         LOG_I(TAG, "Selected sensor %d for calibration", index);
+    }
+}
+
+
+// ============================================================
+// Sensor Poll Interval — persisted in NVS independently of packed config struct
+// ============================================================
+
+void HubController::loadPollInterval() {
+    Preferences prefs;
+    prefs.begin("hub", /*readOnly=*/true);
+    uint32_t sec = prefs.getUInt("sensor_poll_sec", 60);
+    prefs.end();
+    _poll_interval_ms = sec * 1000UL;
+    LOG_I(TAG, "Sensor poll interval: %lus", sec);
+}
+
+void HubController::savePollInterval(uint32_t interval_sec) {
+    Preferences prefs;
+    prefs.begin("hub", /*readOnly=*/false);
+    prefs.putUInt("sensor_poll_sec", interval_sec);
+    prefs.end();
+    _poll_interval_ms = interval_sec * 1000UL;
+    LOG_I(TAG, "Sensor poll interval saved: %lus", interval_sec);
+}
+
+// ============================================================
+// Background Sequential Sensor Polling (non-blocking state machine)
+//
+// IDLE  -> When (millis() - _poll_cycle_start_ms) >= _poll_interval_ms
+//          or _poll_force == true:
+//          advance _poll_idx to first enabled sensor, enter SAMPLING.
+//
+// SAMPLING -> Every POLL_SAMPLE_INTERVAL_MS, read one raw sample from
+//             _local_sensors[_poll_idx] and add to _poll_accumulator.
+//             After POLL_SAMPLES samples, store average in _sensor_cache,
+//             advance _poll_idx to next enabled sensor.
+//             When all sensors done, return to IDLE.
+// ============================================================
+
+void HubController::doBackgroundPoll() {
+    uint32_t now = millis();
+
+    if (_poll_phase == PollPhase::IDLE) {
+        bool start = _poll_force || (now - _poll_cycle_start_ms) >= _poll_interval_ms;
+        if (!start) return;
+
+        // Find first enabled sensor
+        _poll_idx = 0;
+        while (_poll_idx < IWMP_MAX_SENSORS && !(_local_sensors[_poll_idx] && _local_sensors[_poll_idx]->isReady())) {
+            _poll_idx++;
+        }
+        if (_poll_idx >= IWMP_MAX_SENSORS) {
+            // No sensors — reset timer
+            _poll_cycle_start_ms = now;
+            _poll_force = false;
+            return;
+        }
+
+        _poll_sample_count = 0;
+        _poll_accumulator  = 0;
+        _poll_last_sample_ms = now - POLL_SAMPLE_INTERVAL_MS; // fire immediately
+        _poll_phase = PollPhase::SAMPLING;
+        if (_poll_force) {
+            LOG_I(TAG, "Sensor poll: forced");
+        }
+    }
+
+    if (_poll_phase == PollPhase::SAMPLING) {
+        if ((now - _poll_last_sample_ms) < POLL_SAMPLE_INTERVAL_MS) return;
+        _poll_last_sample_ms = now;
+
+        // Take one raw sample (ADS1115 single-shot: ~9 ms blocking — acceptable)
+        if (_local_sensors[_poll_idx] && _local_sensors[_poll_idx]->isReady()) {
+            _poll_accumulator += _local_sensors[_poll_idx]->readRaw();
+        }
+        _poll_sample_count++;
+
+        if (_poll_sample_count >= POLL_SAMPLES) {
+            // Compute and cache average for this sensor
+            uint16_t avg_raw = static_cast<uint16_t>(_poll_accumulator / POLL_SAMPLES);
+            uint8_t  percent = _local_sensors[_poll_idx]->rawToPercent(avg_raw);
+
+            _sensor_cache[_poll_idx].raw          = avg_raw;
+            _sensor_cache[_poll_idx].percent      = percent;
+            _sensor_cache[_poll_idx].last_read_ms = now;
+            _sensor_cache[_poll_idx].valid        = true;
+
+            LOG_I(TAG, "Sensor %d: %d%% (raw=%u)", _poll_idx, percent, avg_raw);
+
+            // Advance to next enabled sensor
+            _poll_idx++;
+            while (_poll_idx < IWMP_MAX_SENSORS && !(_local_sensors[_poll_idx] && _local_sensors[_poll_idx]->isReady())) {
+                _poll_idx++;
+            }
+
+            if (_poll_idx >= IWMP_MAX_SENSORS) {
+                // Cycle complete
+                _poll_cycle_start_ms = now;
+                _poll_force = false;
+                _poll_phase = PollPhase::IDLE;
+                LOG_I(TAG, "Sensor poll cycle complete");
+            } else {
+                // Next sensor — reset sample counters, fire next sample immediately
+                _poll_sample_count = 0;
+                _poll_accumulator  = 0;
+                _poll_last_sample_ms = now - POLL_SAMPLE_INTERVAL_MS;
+            }
+        }
     }
 }
 

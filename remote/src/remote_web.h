@@ -46,6 +46,7 @@ private:
                                size_t index, size_t total);
     void handlePostReboot(AsyncWebServerRequest* request);
     void handlePostReturnMode(AsyncWebServerRequest* request);
+    void handlePostEspNowImport(AsyncWebServerRequest* request, uint8_t* data, size_t len);
 };
 
 // HTML pages (PROGMEM, defined in remote_web.cpp)

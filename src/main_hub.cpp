@@ -32,8 +32,9 @@ void setup() {
     Log.setColors(true);
     Log.setTimestamps(true);
 
-    // Initialize watchdog (30 second timeout)
-    if (Watchdog.begin(30)) {
+    // Initialize watchdog (60 second timeout — sensor reads + WiFi + MQTT can take ~500ms
+    // per iteration; 30 s was too tight and caused spurious resets under load)
+    if (Watchdog.begin(60)) {
         LOG_I(TAG, "Watchdog initialized");
     } else {
         LOG_W(TAG, "Watchdog initialization failed");

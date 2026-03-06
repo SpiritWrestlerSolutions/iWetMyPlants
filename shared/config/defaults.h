@@ -49,7 +49,9 @@ namespace remote_pins {
 // Greenhouse (ESP32-WROOM) defaults
 namespace greenhouse_pins {
     constexpr uint8_t ADC_PINS[] = {32, 33, 34, 35};
-    constexpr uint8_t RELAY_PINS[] = {16, 17, 18, 19};
+    // 8 relay outputs: {16,17,18,19} + {23,25,26,27}
+    // Avoids I2C (21/22), ADC inputs (32-35), strapping pins (0,2,5,12,15)
+    constexpr uint8_t RELAY_PINS[] = {16, 17, 18, 19, 23, 25, 26, 27};
     constexpr uint8_t I2C_SDA = 21;
     constexpr uint8_t I2C_SCL = 22;
     constexpr uint8_t DHT_PIN = 4;
@@ -85,8 +87,8 @@ constexpr uint16_t MOISTURE_WET_VALUE = 1500;       // Typical wet ADC value (12
 constexpr uint16_t ADS1115_DRY_VALUE = 45000;       // Typical dry ADC value (ADS1115)
 constexpr uint16_t ADS1115_WET_VALUE = 18000;       // Typical wet ADC value (ADS1115)
 
-constexpr uint8_t READING_SAMPLES = 10;
-constexpr uint16_t SAMPLE_DELAY_MS = 10;
+constexpr uint8_t READING_SAMPLES = 5;    // 5 samples × 5 ms = 20 ms blocking (was 10×10=90 ms)
+constexpr uint16_t SAMPLE_DELAY_MS = 5;
 constexpr uint8_t MOISTURE_WARNING_LEVEL = 30;  // Warn below 30% moisture
 
 // Environmental sensor defaults
