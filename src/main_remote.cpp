@@ -36,7 +36,7 @@ void setup() {
     delay(1500);
 
     // Initialize logger
-    Log.setLevel(LogLevel::INFO);
+    Log.setLevel(LogLevel::WARN);
     Log.setColors(false);
     Log.setTimestamps(true);
 
@@ -90,13 +90,4 @@ void loop() {
     Remote.loop();
     delay(1);
 
-    // Periodic heartbeat so we can attach the serial monitor mid-run
-    // and immediately see the device state without a reset.
-    static uint32_t s_hb = 0;
-    if (millis() - s_hb > 5000) {
-        s_hb = millis();
-        LOG_I(TAG, "ALIVE t=%lus heap=%u ap=%s",
-              millis() / 1000, ESP.getFreeHeap(),
-              WiFiMgr.getAPIP().toString().c_str());
-    }
 }

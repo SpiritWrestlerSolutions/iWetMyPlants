@@ -614,7 +614,7 @@ const _MANIFESTS = {
     remote: {
         name: 'iWetMyPlants Remote',
         new_install_prompt_erase: true,
-        improv_wifi_serial_timeout: 30,  // 30s for Remote to boot into AP mode + start Improv
+        improv_wifi_serial_timeout: 0,   // Remote: native USB CDC re-enumerates on reset; Improv unreliable
         builds: [{ chipFamily: 'ESP32-C3', parts: [
             { path: _FW + 'remote/bootloader.bin', offset: 0     },
             { path: _FW + 'remote/partitions.bin', offset: 32768 },
