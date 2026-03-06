@@ -614,7 +614,7 @@ const _MANIFESTS = {
     remote: {
         name: 'iWetMyPlants Remote',
         new_install_prompt_erase: true,
-        improv_wifi_serial_timeout: 0,   // Remote has no Improv — skip the detection attempt
+        improv_wifi_serial_timeout: 30,  // 30s for Remote to boot into AP mode + start Improv
         builds: [{ chipFamily: 'ESP32-C3', parts: [
             { path: _FW + 'remote/bootloader.bin', offset: 0     },
             { path: _FW + 'remote/partitions.bin', offset: 32768 },
@@ -624,7 +624,7 @@ const _MANIFESTS = {
     greenhouse: {
         name: 'iWetMyPlants Greenhouse',
         new_install_prompt_erase: true,
-        improv_wifi_serial_timeout: 0,   // Greenhouse has no Improv — skip the detection attempt
+        improv_wifi_serial_timeout: 30,  // 30s for Greenhouse to boot into AP mode + start Improv
         builds: [{ chipFamily: 'ESP32', parts: [
             { path: _FW + 'greenhouse/bootloader.bin', offset: 4096  },
             { path: _FW + 'greenhouse/partitions.bin', offset: 32768 },
