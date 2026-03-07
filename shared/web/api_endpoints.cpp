@@ -304,9 +304,12 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     // Relays (Greenhouse) - explicit routes
     server.on("/api/relays", HTTP_GET, handleGetRelays);
 
-    // Relay control routes 0-3
-    static const char* relay_paths[] = {"/api/relays/0", "/api/relays/1", "/api/relays/2", "/api/relays/3"};
-    for (int i = 0; i < 4; i++) {
+    // Relay control routes 0-7
+    static const char* relay_paths[] = {
+        "/api/relays/0", "/api/relays/1", "/api/relays/2", "/api/relays/3",
+        "/api/relays/4", "/api/relays/5", "/api/relays/6", "/api/relays/7"
+    };
+    for (int i = 0; i < 8; i++) {
         server.on(relay_paths[i], HTTP_POST,
             [](AsyncWebServerRequest* request) {},
             nullptr,
