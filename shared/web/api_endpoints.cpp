@@ -21,6 +21,7 @@ RelayStateCallback ApiEndpoints::s_relay_state_callback = nullptr;
 ApiRelayControlCallback ApiEndpoints::s_relay_control_callback = nullptr;
 ApiCalibrationCallback ApiEndpoints::s_calibration_callback = nullptr;
 PairedDevicesCallback ApiEndpoints::s_paired_devices_callback = nullptr;
+EnvironmentalDataCallback ApiEndpoints::s_env_callback = nullptr;
 
 // ============ Callback Registration ============
 
@@ -46,6 +47,10 @@ void ApiEndpoints::onCalibration(ApiCalibrationCallback callback) {
 
 void ApiEndpoints::onPairedDevices(PairedDevicesCallback callback) {
     s_paired_devices_callback = callback;
+}
+
+void ApiEndpoints::onEnvironmentalData(EnvironmentalDataCallback callback) {
+    s_env_callback = callback;
 }
 
 // ============ Response Helpers ============
@@ -333,7 +338,24 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         }
     );
 
-    Serial.println("[API] Routes registered");
+    // Environmental sensor (Greenhouse only)
+    server.on("/api/environment", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        float temp = NAN, hum = NAN;
+        const char* stype = "None";
+        if (s_env_callback && s_env_callback(temp, hum, stype)) {
+            if (!isnan(temp)) doc["temperature"] = temp;
+            if (!isnan(hum)) doc["humidity"] = hum;
+            doc["sensor_type"] = stype;
+            doc["valid"] = !isnan(temp) && !isnan(hum);
+        } else {
+            doc["valid"] = false;
+            doc["sensor_type"] = "None";
+        }
+        sendJson(request, doc);
+    });
+
+        Serial.println("[API] Routes registered");
 }
 
 // ============ Status & System Handlers ============

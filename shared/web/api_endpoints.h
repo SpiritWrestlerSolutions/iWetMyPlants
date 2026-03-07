@@ -108,6 +108,11 @@ struct PairedDeviceInfo {
 using PairedDevicesCallback = std::function<size_t(PairedDeviceInfo* devices, size_t max_count)>;
 
 /**
+ * @brief Environmental data provider callback (Greenhouse only)
+ */
+using EnvironmentalDataCallback = std::function<bool(float& temperature, float& humidity, const char*& sensor_type)>;
+
+/**
  * @brief REST API endpoint handlers
  *
  * Registers and handles all /api/* routes.
@@ -153,6 +158,11 @@ public:
      */
     static void onPairedDevices(PairedDevicesCallback callback);
 
+    /**
+     * @brief Set environmental data provider (Greenhouse only)
+     */
+    static void onEnvironmentalData(EnvironmentalDataCallback callback);
+
     // ============ Response Helpers ============
 
     /**
@@ -178,6 +188,7 @@ private:
     static ApiRelayControlCallback s_relay_control_callback;
     static ApiCalibrationCallback s_calibration_callback;
     static PairedDevicesCallback s_paired_devices_callback;
+    static EnvironmentalDataCallback s_env_callback;
 
     // ============ Endpoint Handlers ============
 

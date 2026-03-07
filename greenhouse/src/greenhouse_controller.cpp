@@ -587,6 +587,30 @@ void GreenhouseController::setupWebRoutes() {
         return setRelay(index, state, 0);
     });
 
+    // Register environmental data callback
+    ApiEndpoints::onEnvironmentalData([this](float& temperature, float& humidity, const char*& sensor_type) -> bool {
+        temperature = _last_temperature;
+        humidity = _last_humidity;
+        const auto& env_cfg = Config.getEnvSensor();
+        switch (env_cfg.sensor_type) {
+            case EnvSensorType::DHT11:  sensor_type = "DHT11";  break;
+            case EnvSensorType::DHT22:  sensor_type = "DHT22";  break;
+            case EnvSensorType::SHT30:  sensor_type = "SHT30";  break;
+            case EnvSensorType::SHT31:  sensor_type = "SHT31";  break;
+            case EnvSensorType::SHT40:  sensor_type = "SHT40";  break;
+            case EnvSensorType::SHT41:  sensor_type = "SHT41";  break;
+            default:                    sensor_type = "None";    break;
+        }
+        return _dht_sensor != nullptr || _sht_sensor != nullptr;
+    });
+
+    // Automation status endpoint (GET /automation)
+    Web.addRoute("/automation", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "{\"enabled\":%s}", isAutomationEnabled() ? "true" : "false");
+        req->send(200, "application/json", buf);
+    });
+
     // Relay control endpoint
     Web.addRoute("/relay/{index}", HTTP_POST, [this](AsyncWebServerRequest* req) {
         String indexStr = req->pathArg(0);
