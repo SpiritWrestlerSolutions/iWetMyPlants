@@ -279,6 +279,17 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         }
     );
 
+    server.on("/api/config/env_sensor", HTTP_GET, [](AsyncWebServerRequest* request) {
+        handleGetConfigSection(request, "env_sensor");
+    });
+    server.on("/api/config/env_sensor", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handlePostConfigSection(request, "env_sensor", data, len);
+        }
+    );
+
     // General /api/config routes - register AFTER specific section routes
     server.on("/api/config", HTTP_GET, handleGetConfig);
 
@@ -512,6 +523,14 @@ void ApiEndpoints::handleGetConfigSection(AsyncWebServerRequest* request, const 
         const auto& config = Config.getConfig();
         doc["channel"] = config.espnow.channel;
         doc["encryption"] = config.espnow.encryption_enabled;
+    } else if (section == "env_sensor") {
+        JsonObject obj = doc.to<JsonObject>();
+        const auto& env = Config.getEnvSensor();
+        obj["enabled"] = env.enabled;
+        obj["sensor_type"] = static_cast<uint8_t>(env.sensor_type);
+        obj["pin"] = env.pin;
+        obj["i2c_address"] = env.i2c_address;
+        obj["read_interval_sec"] = env.read_interval_sec;
     } else {
         sendError(request, 404, "Unknown config section");
         return;
@@ -572,6 +591,28 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
         }
         if (doc.containsKey("encryption")) {
             config.espnow.encryption_enabled = doc["encryption"];
+            success = true;
+        }
+    } else if (section == "env_sensor") {
+        auto& env = Config.getEnvSensorMutable();
+        if (doc.containsKey("enabled")) {
+            env.enabled = doc["enabled"].as<bool>();
+            success = true;
+        }
+        if (doc.containsKey("sensor_type")) {
+            env.sensor_type = static_cast<EnvSensorType>(doc["sensor_type"].as<uint8_t>());
+            success = true;
+        }
+        if (doc.containsKey("pin")) {
+            env.pin = doc["pin"].as<uint8_t>();
+            success = true;
+        }
+        if (doc.containsKey("i2c_address")) {
+            env.i2c_address = doc["i2c_address"].as<uint8_t>();
+            success = true;
+        }
+        if (doc.containsKey("read_interval_sec")) {
+            env.read_interval_sec = doc["read_interval_sec"].as<uint16_t>();
             success = true;
         }
     }
