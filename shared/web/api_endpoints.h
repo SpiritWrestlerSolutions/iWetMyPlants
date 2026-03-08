@@ -108,6 +108,13 @@ struct PairedDeviceInfo {
 using PairedDevicesCallback = std::function<size_t(PairedDeviceInfo* devices, size_t max_count)>;
 
 /**
+ * @brief Delete device callback (Hub only)
+ * @param index List index of the device to remove
+ * @return true if device was found and removed
+ */
+using DeleteDeviceCallback = std::function<bool(uint8_t index)>;
+
+/**
  * @brief Environmental data provider callback (Greenhouse only)
  */
 using EnvironmentalDataCallback = std::function<bool(float& temperature, float& humidity, const char*& sensor_type)>;
@@ -159,6 +166,11 @@ public:
     static void onPairedDevices(PairedDevicesCallback callback);
 
     /**
+     * @brief Set delete device handler (Hub only)
+     */
+    static void onDeleteDevice(DeleteDeviceCallback callback);
+
+    /**
      * @brief Set environmental data provider (Greenhouse only)
      */
     static void onEnvironmentalData(EnvironmentalDataCallback callback);
@@ -188,6 +200,7 @@ private:
     static ApiRelayControlCallback s_relay_control_callback;
     static ApiCalibrationCallback s_calibration_callback;
     static PairedDevicesCallback s_paired_devices_callback;
+    static DeleteDeviceCallback s_delete_device_callback;
     static EnvironmentalDataCallback s_env_callback;
 
     // ============ Endpoint Handlers ============

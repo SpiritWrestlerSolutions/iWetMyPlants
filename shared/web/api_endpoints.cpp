@@ -22,6 +22,7 @@ ApiRelayControlCallback ApiEndpoints::s_relay_control_callback = nullptr;
 ApiCalibrationCallback ApiEndpoints::s_calibration_callback = nullptr;
 PairedDevicesCallback ApiEndpoints::s_paired_devices_callback = nullptr;
 EnvironmentalDataCallback ApiEndpoints::s_env_callback = nullptr;
+DeleteDeviceCallback ApiEndpoints::s_delete_device_callback = nullptr;
 
 // ============ Callback Registration ============
 
@@ -51,6 +52,10 @@ void ApiEndpoints::onPairedDevices(PairedDevicesCallback callback) {
 
 void ApiEndpoints::onEnvironmentalData(EnvironmentalDataCallback callback) {
     s_env_callback = callback;
+}
+
+void ApiEndpoints::onDeleteDevice(DeleteDeviceCallback callback) {
+    s_delete_device_callback = callback;
 }
 
 // ============ Response Helpers ============
@@ -726,8 +731,15 @@ void ApiEndpoints::handleGetDevices(AsyncWebServerRequest* request) {
 }
 
 void ApiEndpoints::handleDeleteDevice(AsyncWebServerRequest* request, uint8_t index) {
-    // TODO: Implement device removal from pairing list
-    sendError(request, 501, "Not implemented");
+    if (!s_delete_device_callback) {
+        sendError(request, 501, "Not available");
+        return;
+    }
+    if (s_delete_device_callback(index)) {
+        sendSuccess(request, "Device removed");
+    } else {
+        sendError(request, 404, "Device not found");
+    }
 }
 
 // ============ WiFi Handlers ============

@@ -189,12 +189,13 @@ void HubController::handleMqttConnectState() {
                 LOG_W(TAG, "MQTT disconnected (reason: %d)", (int)reason);
             });
 
-            Mqtt.onRelayCommand([this](uint8_t relay_idx, bool state, uint32_t duration) {
-                LOG_I(TAG, "MQTT relay command: relay=%d, state=%d, dur=%lu",
-                      relay_idx, state, duration);
-                // Forward to appropriate greenhouse device
-                // TODO: Look up target device for this relay
-            });
+            // Hub-to-Greenhouse relay forwarding via MQTT is a planned feature.
+            // The Hub does not currently proxy relay commands to paired Greenhouse
+            // devices over ESP-NOW. Enable and implement once device targeting is
+            // designed (needs a relay-index â†’ target-MAC mapping in the registry).
+            // Mqtt.onRelayCommand([this](uint8_t relay_idx, bool state, uint32_t duration) {
+            //     EspNow.sendRelayCommand(target_mac, relay_idx, state, duration);
+            // });
 
             mqtt_started = true;
         } else {
@@ -620,6 +621,28 @@ void HubController::setupWebRoutes() {
         return count;
     });
 
+    ApiEndpoints::onDeleteDevice([this](uint8_t index) -> bool {
+        // Walk the registry to find device at the given list index
+        size_t count = 0;
+        uint8_t target_mac[6] = {};
+        bool found = false;
+        _registry.forEachDevice([&](RegisteredDevice& dev) {
+            if (count == index) {
+                memcpy(target_mac, dev.mac, 6);
+                found = true;
+            }
+            count++;
+        });
+        if (!found) return false;
+
+        bool removed = _registry.removeDevice(target_mac);
+        if (removed) {
+            _registry.saveToNVS();
+            EspNow.removePeer(target_mac);
+        }
+        return removed;
+    });
+
     // POST /api/remote/report - receive sensor data from WiFi-connected remotes
     Web.addRouteWithBody("/api/remote/report", HTTP_POST,
         [](AsyncWebServerRequest* request) {},
@@ -778,7 +801,7 @@ void HubController::setupWebRoutes() {
         ApiEndpoints::sendJson(request, doc);
     });
 
-    // GET /api/espnow/export — export hub config so a Remote can import it in one step
+    // GET /api/espnow/export ï¿½ export hub config so a Remote can import it in one step
     Web.addRoute("/api/espnow/export", HTTP_GET, [this](AsyncWebServerRequest* request) {
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -805,9 +828,7 @@ void HubController::setupWebRoutes() {
 }
 
 bool HubController::isConfigButtonPressed() {
-    // TODO: Configure GPIO for config button
-    // For now, return false (no button)
-    return false;
+    return digitalRead(0) == LOW;
 }
 
 void HubController::initializeLocalSensors() {

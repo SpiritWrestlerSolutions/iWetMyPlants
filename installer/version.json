@@ -1,11 +1,11 @@
 {
-  "version": "2.0.0",
-  "date": "2026-01-29",
+  "version": "1.0.0",
+  "date": "2026-03-08",
   "commit": "",
   "changelog": [
     {
-      "version": "2.0.0",
-      "date": "2026-01-29",
+      "version": "1.0.0",
+      "date": "2026-03-08",
       "notes": [
         "Complete ground-up rewrite with three independent device types",
         "Hub: WiFi + ESP-NOW coordinator with MQTT / Home Assistant bridge",
