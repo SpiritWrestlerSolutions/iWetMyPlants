@@ -12,7 +12,7 @@
     --text-color: #333333;
     --text-muted: #666666;
     --border-color: #e0e0e0;
-    --shadow: 0 2px 4px rgba(0,0,0,0.1);
+    --shadow: 0 2px 4px rgba(0,0,0,0.11);
 }
 
 * {
