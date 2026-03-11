@@ -33,7 +33,6 @@ jobs:
         run: pip install platformio
 
       # ── Build all three targets ──────────────────────────────────────────────
-
       - name: Build Hub
         run: pio run -e hub
 
@@ -44,7 +43,6 @@ jobs:
         run: pio run -e greenhouse
 
       # ── Extract version from platformio.ini ─────────────────────────────────
-
       - name: Extract version
         id: version
         run: |
@@ -59,7 +57,6 @@ jobs:
           echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
 
       # ── Collect binaries ────────────────────────────────────────────────────
-
       - name: Collect firmware binaries
         run: |
           for ENV in hub remote greenhouse; do
@@ -70,6 +67,12 @@ jobs:
           done
 
       # ── Update installer metadata ────────────────────────────────────────────
+      - name: Stamp version into manifests
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for f in installer/install/*.json; do
+            sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$f"
+          done
 
       - name: Write version.json
         run: |
@@ -90,8 +93,6 @@ jobs:
           }
           EOF
 
-      # ── Upload build artifacts ───────────────────────────────────────────────
-
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -99,15 +100,25 @@ jobs:
           path: firmware/
           retention-days: 30
 
-      - name: Debug installer contents
+      # ── Prepare Single Deployment Staging Directory ──────────────────────────
+      - name: Prepare Staging Directory
         run: |
-          echo "=== installer/ contents ==="
-          ls -la ./installer/
-          find ./installer -type f
+          mkdir -p deploy_stage
+          
+          # 1. Copy everything from installer (including index.html and install folder)
+          cp -a installer/. deploy_stage/
+          
+          # 2. Copy the compiled firmware folder so it sits alongside index.html
+          cp -a firmware deploy_stage/
+          
+      - name: Debug Staging Directory
+        run: |
+          echo "=== deploy_stage/ contents ==="
+          ls -la ./deploy_stage/
+          find ./deploy_stage -type f
 
-      # ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
-
-      - name: Deploy installer to /plants/install/
+      # ── Deploy Everything to spiritwrestler.ca in ONE step ───────────────────
+      - name: Deploy to Server
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
@@ -115,41 +126,5 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 27
-          local_path: ./installer/
+          local_path: ./deploy_stage/
           remote_path: ./public_html/plants/
-
-      # Deploy each device subdirectory explicitly — glob wildcard (*) with the
-      # SFTP action doesn't reliably preserve subdirectory structure, which
-      # caused 404s when the manifest resolved ../../firmware/hub/bootloader.bin.
-      - name: Deploy Hub firmware binaries
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 27
-          local_path: ./firmware/hub/
-          remote_path: ./public_html/plants/firmware/hub/
-
-      - name: Deploy Remote firmware binaries
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 27
-          local_path: ./firmware/remote/
-          remote_path: ./public_html/plants/firmware/remote/
-
-      - name: Deploy Greenhouse firmware binaries
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 27
-          local_path: ./firmware/greenhouse/
-          remote_path: ./public_html/plants/firmware/greenhouse/
