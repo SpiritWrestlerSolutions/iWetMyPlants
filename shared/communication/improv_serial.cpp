@@ -172,6 +172,7 @@ void ImprovSerial::handleWifiSettings(const uint8_t* data, uint8_t len) {
     if (ok) {
         sendRpcResult(url);
         sendCurrentState(State::PROVISIONED);
+        _reProvisioned = true;
         LOG_I(TAG, "Improv: provisioned â€” device at %s", url.c_str());
         // Caller detects isProvisioned() and reboots after TX drains
     } else {
@@ -232,6 +233,15 @@ void ImprovSerial::sendPacket(uint8_t type, const uint8_t* data, uint8_t len) {
 
     // Checksum
     _serial->write(chk);
+}
+
+void ImprovSerial::broadcastProvisioned(const String& url) {
+    if (!_serial) return;
+    // Tell the browser the device is already connected with its URL.
+    // Does NOT set _reProvisioned — wasReProvisioned() only fires when
+    // the user actively submits new credentials via the browser dialog.
+    sendRpcResult(url);
+    sendCurrentState(State::PROVISIONED);
 }
 
 } // namespace iwmp

@@ -97,6 +97,39 @@ void HubController::handleLoadConfigState() {
         }
     }
 
+    // Initialize Improv WiFi Serial provisioning once at boot so the
+    // web installer can configure WiFi even if the device reconnects to
+    // a saved network and never enters AP mode.
+    if (!_improvStarted) {
+        _improvStarted = true;
+        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
+            WiFiMgr.stopCaptivePortal();
+            WiFiMgr.stopAP();
+            WiFi.mode(WIFI_STA);
+            WiFi.begin(ssid, pwd);
+
+            uint32_t t = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
+                Watchdog.feed();
+                delay(100);
+            }
+
+            if (WiFi.status() != WL_CONNECTED) {
+                char ap_ssid[32];
+                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Hub-%s", Config.getDeviceId() + 6);
+                WiFiMgr.startAP(ap_ssid);
+                WiFiMgr.startCaptivePortal();
+                return false;
+            }
+
+            outUrl = "http://" + WiFi.localIP().toString();
+            Config.setWifiCredentials(ssid, pwd);
+            Config.save();
+            return true;
+        });
+        _improv.begin(Serial);
+    }
+
     // Check if WiFi is configured
     const auto& wifi_cfg = Config.getWifi();
     if (strlen(wifi_cfg.ssid) > 0) {
@@ -246,58 +279,18 @@ void HubController::handleApModeState() {
         ap_started = true;
     }
 
-    // Start Improv WiFi Serial provisioning (once, on first AP_MODE entry)
-    if (!_improvStarted) {
-        _improvStarted = true;
-        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
-            WiFiMgr.stopCaptivePortal();
-            WiFiMgr.stopAP();
-            WiFi.mode(WIFI_STA);
-            WiFi.begin(ssid, pwd);
-
-            uint32_t t = millis();
-            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
-                Watchdog.feed();
-                delay(100);
-            }
-
-            if (WiFi.status() != WL_CONNECTED) {
-                // Restore AP so the user can still configure via captive portal
-                char ap_ssid[32];
-                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Hub-%s", Config.getDeviceId() + 6);
-                WiFiMgr.startAP(ap_ssid);
-                WiFiMgr.startCaptivePortal();
-                return false;
-            }
-
-            outUrl = "http://" + WiFi.localIP().toString();
-            Config.setWifiCredentials(ssid, pwd);
-            Config.save();
-            return true;
-        });
-        _improv.begin(Serial);
-    }
-
+    // Improv is already initialized at boot (see handleLoadConfigState)
     // Process WiFi (captive portal DNS) and Improv serial
     WiFiMgr.loop();
     _improv.loop();
 
     // Improv provisioning succeeded — drain TX then reboot into WIFI_CONNECT
-    if (_improv.isProvisioned()) {
+    if (_improv.wasReProvisioned()) {
         LOG_I(TAG, "Improv provisioning complete — rebooting");
         delay(1500);
         ESP.restart();
     }
 
-    // Captive portal path: user configured WiFi via the web UI
-    const auto& wifi_cfg = Config.getWifi();
-    if (strlen(wifi_cfg.ssid) > 0 && !_improv.isProvisioned()) {
-        LOG_I(TAG, "WiFi configured via captive portal, connecting");
-        ap_started = false;
-        WiFiMgr.stopCaptivePortal();
-        WiFiMgr.stopAP();
-        enterState(HubState::WIFI_CONNECT);
-    }
 }
 
 void HubController::handleOperationalState() {
@@ -308,6 +301,8 @@ void HubController::handleOperationalState() {
         loadPollInterval();
         // Kick off an initial poll immediately
         _poll_force = true;
+        // Notify the installer browser that the device is already connected
+        _improv.broadcastProvisioned("http://" + WiFiMgr.getIP().toString());
     }
 
     // Process all subsystems
@@ -353,6 +348,14 @@ void HubController::handleOperationalState() {
             _last_publish_time = millis();
             publishAggregatedState();
         }
+    }
+
+    // Improv WiFi Serial — allow browser to re-provision even when already connected
+    _improv.loop();
+    if (_improv.wasReProvisioned()) {
+        LOG_I(TAG, "Improv re-provisioning complete — rebooting");
+        delay(1500);
+        ESP.restart();
     }
 
     // Check for config button (force AP mode)

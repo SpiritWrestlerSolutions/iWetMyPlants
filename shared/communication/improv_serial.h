@@ -51,6 +51,19 @@ public:
 
     void setConnectCallback(ConnectCb cb) { _connectCb = cb; }
 
+    /**
+     * Announce to the installer browser that the device is already connected.
+     * Does NOT set wasReProvisioned() — that only fires when the user submits
+     * new credentials via the browser dialog.
+     */
+    void broadcastProvisioned(const String& url);
+
+    /**
+     * True once the user submitted credentials via the browser dialog AND
+     * the device connected successfully.  Distinct from isProvisioned().
+     */
+    bool wasReProvisioned() const { return _reProvisioned; }
+
 private:
     void parseBuffer();
     void handleRpcCommand(const uint8_t* data, uint8_t len);
@@ -66,6 +79,7 @@ private:
     uint32_t  _lastBroadcast = 0;
     uint8_t   _rxBuf[256]   = {};
     uint16_t  _rxLen         = 0;
+    bool      _reProvisioned = false;
 };
 
 } // namespace iwmp
