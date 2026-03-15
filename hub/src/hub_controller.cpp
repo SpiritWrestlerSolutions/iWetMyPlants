@@ -104,8 +104,12 @@ void HubController::handleLoadConfigState() {
         _improvStarted = true;
         _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
             WiFiMgr.stopCaptivePortal();
-            WiFiMgr.stopAP();
-            WiFi.mode(WIFI_STA);
+
+            // Keep the WiFi driver alive by switching to AP+STA instead of
+            // stopping the AP first.  stopAP() calls softAPdisconnect(true)
+            // which runs esp_wifi_stop() — re-starting it with WiFi.mode(STA)
+            // can be racy and cause WiFi.begin() to never actually connect.
+            WiFi.mode(WIFI_AP_STA);
             WiFi.begin(ssid, pwd);
 
             uint32_t t = millis();
@@ -115,12 +119,15 @@ void HubController::handleLoadConfigState() {
             }
 
             if (WiFi.status() != WL_CONNECTED) {
-                char ap_ssid[32];
-                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-Hub-%s", Config.getDeviceId() + 6);
-                WiFiMgr.startAP(ap_ssid);
+                WiFi.mode(WIFI_AP);   // Restore pure AP on failure
                 WiFiMgr.startCaptivePortal();
                 return false;
             }
+
+            // Connected — now drop the AP cleanly (softAPdisconnect false keeps
+            // the WiFi driver running in STA mode)
+            WiFi.softAPdisconnect(false);
+            WiFi.mode(WIFI_STA);
 
             outUrl = "http://" + WiFi.localIP().toString();
             Config.setWifiCredentials(ssid, pwd);

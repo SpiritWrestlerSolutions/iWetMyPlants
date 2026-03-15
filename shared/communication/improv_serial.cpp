@@ -37,6 +37,8 @@ void ImprovSerial::begin(Stream& serial) {
     _state        = State::AUTHORIZED;
     _rxLen        = 0;
     _lastBroadcast = 0;
+    // Discard any bytes already in the RX FIFO (e.g. boot-time garbage)
+    while (_serial->available()) _serial->read();
     LOG_I(TAG, "Improv WiFi Serial ready — waiting for browser");
 }
 
@@ -111,8 +113,10 @@ void ImprovSerial::parseBuffer() {
         for (uint16_t i = 0; i < pkt_total - 1; i++) chk += _rxBuf[i];
 
         if (_rxBuf[pkt_total - 1] != chk) {
-            LOG_W(TAG, "Checksum mismatch — dropping packet");
-            sendError(Error::INVALID_RPC);
+            LOG_W(TAG, "Checksum mismatch (exp=0x%02X got=0x%02X type=0x%02X dlen=%u) dropped",
+                  chk, _rxBuf[pkt_total - 1], pkt_type, pkt_data_len);
+            // Do NOT send INVALID_RPC: aborts browser dialog permanently.
+            // Drop silently and let the browser retransmit.
             memmove(_rxBuf, _rxBuf + pkt_total, _rxLen - pkt_total);
             _rxLen -= pkt_total;
             continue;
@@ -171,6 +175,7 @@ void ImprovSerial::handleWifiSettings(const uint8_t* data, uint8_t len) {
 
     LOG_I(TAG, "Improv: received credentials for SSID '%s' — connecting", ssid);
     sendCurrentState(State::PROVISIONING);
+    _serial->flush();  // Ensure PROVISIONING reaches browser before blocking
 
     String url;
     bool ok = _connectCb ? _connectCb(ssid, password, url) : false;
@@ -275,7 +280,7 @@ void ImprovSerial::sendPacket(uint8_t type, const uint8_t* data, uint8_t len) {
 void ImprovSerial::broadcastProvisioned(const String& url) {
     if (!_serial) return;
     // Tell the browser the device is already connected with its URL.
-    // Does NOT set _reProvisioned � wasReProvisioned() only fires when
+    // Does NOT set _reProvisioned � wasReProvisioned() only fires when
     // the user actively submits new credentials via the browser dialog.
     sendRpcResult(url);
     sendCurrentState(State::PROVISIONED);
