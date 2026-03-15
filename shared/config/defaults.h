@@ -290,14 +290,15 @@ inline void initDefaultConfig(DeviceConfig& config, DeviceType type) {
 
         case DeviceType::REMOTE:
             initDefaultMoistureSensor(config.moisture_sensors[0], 0, remote_pins::ADC_PIN);
-            // Sensors 1-3: ADS1115 channels 0-2 (disabled by default)
-            for (uint8_t i = 1; i < IWMP_MAX_SENSORS; i++) {
-                initDefaultMoistureSensor(config.moisture_sensors[i], i, 0);
-                config.moisture_sensors[i].input_type = SensorInputType::ADS1115;
-                config.moisture_sensors[i].ads_channel = (uint8_t)(i - 1);
-                config.moisture_sensors[i].ads_i2c_address = defaults::ADS1115_DEFAULT_ADDRESS;
-                config.moisture_sensors[i].dry_value = defaults::ADS1115_DRY_VALUE;
-                config.moisture_sensors[i].wet_value = defaults::ADS1115_WET_VALUE;
+            // Sensors 1-3: Direct ADC on GPIO2/3/4 (disabled by default)
+            // GPIO1 is reserved for battery ADC; ADS1115 available via settings
+            {
+                static const uint8_t extra_pins[] = {2, 3, 4};
+                for (uint8_t i = 1; i < IWMP_MAX_SENSORS; i++) {
+                    uint8_t pin = (i - 1 < sizeof(extra_pins)) ? extra_pins[i - 1] : 0;
+                    initDefaultMoistureSensor(config.moisture_sensors[i], i, pin);
+                    // input_type stays DIRECT_ADC (default from initDefaultMoistureSensor)
+                }
             }
             initDefaultEnvSensor(config.env_sensor, 0);
             initDefaultPower(config.power);
