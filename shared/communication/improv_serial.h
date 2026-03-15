@@ -51,6 +51,10 @@ public:
 
     void setConnectCallback(ConnectCb cb) { _connectCb = cb; }
 
+    /** Set device info returned by CMD_GET_DEVICE_INFO (0x03). */
+    void setDeviceInfo(const char* fw_name, const char* fw_version,
+                       const char* hw_chip,  const char* dev_name);
+
     /**
      * Announce to the installer browser that the device is already connected.
      * Does NOT set wasReProvisioned() — that only fires when the user submits
@@ -68,6 +72,8 @@ private:
     void parseBuffer();
     void handleRpcCommand(const uint8_t* data, uint8_t len);
     void handleWifiSettings(const uint8_t* data, uint8_t len);
+    void handleIdentify();
+    void handleGetDeviceInfo();
     void sendCurrentState(State s);
     void sendError(Error e);
     void sendRpcResult(const String& url);
@@ -80,6 +86,12 @@ private:
     uint8_t   _rxBuf[256]   = {};
     uint16_t  _rxLen         = 0;
     bool      _reProvisioned = false;
+
+    // Device info for CMD_GET_DEVICE_INFO responses
+    char _fw_name[32]    = "iWetMyPlants";
+    char _fw_version[16] = "1.0.0";
+    char _hw_chip[16]    = "ESP32";
+    char _dev_name[32]   = "iWetMyPlants";
 };
 
 } // namespace iwmp

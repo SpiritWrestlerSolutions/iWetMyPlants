@@ -128,6 +128,8 @@ void HubController::handleLoadConfigState() {
             return true;
         });
         _improv.begin(Serial);
+        _improv.setDeviceInfo("iWetMyPlants Hub", IWMP_VERSION, "ESP32",
+                              Config.getDeviceId());
     }
 
     // Check if WiFi is configured

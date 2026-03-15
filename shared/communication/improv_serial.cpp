@@ -21,7 +21,9 @@ static constexpr uint8_t TYPE_ERROR_STATE   = 0x02;
 static constexpr uint8_t TYPE_RPC_COMMAND   = 0x03;
 static constexpr uint8_t TYPE_RPC_RESULT    = 0x04;
 
-static constexpr uint8_t CMD_WIFI_SETTINGS  = 0x01;
+static constexpr uint8_t CMD_WIFI_SETTINGS   = 0x01;
+static constexpr uint8_t CMD_IDENTIFY        = 0x02;
+static constexpr uint8_t CMD_GET_DEVICE_INFO = 0x03;
 
 static constexpr uint32_t BROADCAST_INTERVAL_MS = 1000;
 
@@ -135,6 +137,10 @@ void ImprovSerial::handleRpcCommand(const uint8_t* data, uint8_t len) {
     }
     if (data[0] == CMD_WIFI_SETTINGS) {
         handleWifiSettings(data, len);
+    } else if (data[0] == CMD_IDENTIFY) {
+        handleIdentify();
+    } else if (data[0] == CMD_GET_DEVICE_INFO) {
+        handleGetDeviceInfo();
     } else {
         LOG_W(TAG, "Unknown RPC command: 0x%02X", data[0]);
         sendError(Error::UNKNOWN_RPC);
@@ -180,6 +186,37 @@ void ImprovSerial::handleWifiSettings(const uint8_t* data, uint8_t len) {
         sendError(Error::UNABLE_TO_CONNECT);
         sendCurrentState(State::AUTHORIZED);  // Allow retry without page refresh
     }
+}
+
+void ImprovSerial::setDeviceInfo(const char* fw_name, const char* fw_version,
+                                 const char* hw_chip,  const char* dev_name) {
+    strlcpy(_fw_name,    fw_name,    sizeof(_fw_name));
+    strlcpy(_fw_version, fw_version, sizeof(_fw_version));
+    strlcpy(_hw_chip,    hw_chip,    sizeof(_hw_chip));
+    strlcpy(_dev_name,   dev_name,   sizeof(_dev_name));
+}
+
+void ImprovSerial::handleIdentify() {
+    // Spec: blink device LED.  No response packet required.
+    LOG_I(TAG, "Improv: CMD_IDENTIFY (no LED configured)");
+}
+
+void ImprovSerial::handleGetDeviceInfo() {
+    // Response: [cmd][count=4][len][fw_name][len][fw_ver][len][chip][len][dev_name]
+    const char* strings[4] = { _fw_name, _fw_version, _hw_chip, _dev_name };
+    uint8_t buf[148];  // 2 header + 4*(1 len byte + up to 32 chars) = 138 max
+    uint8_t pos = 0;
+    buf[pos++] = CMD_GET_DEVICE_INFO;
+    buf[pos++] = 4;  // four strings follow
+    for (int i = 0; i < 4; i++) {
+        uint8_t slen = (uint8_t)strnlen(strings[i], 32);
+        if (pos + 1 + slen > sizeof(buf)) break;
+        buf[pos++] = slen;
+        memcpy(&buf[pos], strings[i], slen);
+        pos += slen;
+    }
+    sendPacket(TYPE_RPC_RESULT, buf, pos);
+    LOG_I(TAG, "Improv: CMD_GET_DEVICE_INFO -> %s %s", _fw_name, _fw_version);
 }
 
 void ImprovSerial::sendCurrentState(State s) {
