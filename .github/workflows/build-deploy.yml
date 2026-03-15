@@ -100,31 +100,45 @@ jobs:
           path: firmware/
           retention-days: 30
 
-      # ── Prepare Single Deployment Staging Directory ──────────────────────────
-      - name: Prepare Staging Directory
+      # ── Deploy to spiritwrestler.ca ──────────────────────────────────────────
+      - name: Setup SSH key
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         run: |
-          mkdir -p deploy_stage
-          
-          # 1. Copy everything from installer (including index.html and install folder)
-          cp -a installer/. deploy_stage/
-          
-          # 2. Copy the compiled firmware folder so it sits alongside index.html
-          cp -a firmware deploy_stage/
-          
-      - name: Debug Staging Directory
-        run: |
-          echo "=== deploy_stage/ contents ==="
-          ls -la ./deploy_stage/
-          find ./deploy_stage -type f
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p 27 "${{ secrets.FTP_SERVER }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      # ── Deploy Everything to spiritwrestler.ca in ONE step ───────────────────
       - name: Deploy to Server
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 27
-          local_path: ./deploy_stage/
-          remote_path: ./public_html/plants/
+        env:
+          SFTP_USER: ${{ secrets.FTP_USERNAME }}
+          SFTP_HOST: ${{ secrets.FTP_SERVER }}
+        run: |
+          SFTP="sftp -P 27 -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+          ROOT="public_html/plants"
+
+          # Ensure remote directory tree exists (- prefix = ignore error if already exists)
+          {
+            echo "-mkdir $ROOT/firmware"
+            echo "-mkdir $ROOT/firmware/hub"
+            echo "-mkdir $ROOT/firmware/remote"
+            echo "-mkdir $ROOT/firmware/greenhouse"
+          } | $SFTP -b - "$SFTP_USER@$SFTP_HOST"
+
+          # Upload firmware binaries — file-to-file, no directory-to-directory ambiguity
+          for ENV in hub remote greenhouse; do
+            {
+              echo "put .pio/build/$ENV/bootloader.bin $ROOT/firmware/$ENV/bootloader.bin"
+              echo "put .pio/build/$ENV/partitions.bin $ROOT/firmware/$ENV/partitions.bin"
+              echo "put .pio/build/$ENV/firmware.bin   $ROOT/firmware/$ENV/firmware.bin"
+            } | $SFTP -b - "$SFTP_USER@$SFTP_HOST"
+          done
+
+          # Upload installer assets
+          echo "put installer/index.html    $ROOT/index.html"    | $SFTP -b - "$SFTP_USER@$SFTP_HOST"
+          echo "put installer/version.json  $ROOT/version.json"  | $SFTP -b - "$SFTP_USER@$SFTP_HOST"
+          # Banner has a space in the filename — quote both sides
+          printf 'put "%s" "%s"\n' \
+            "installer/IWMP Banner.webp" "$ROOT/IWMP Banner.webp" \
+            | $SFTP -b - "$SFTP_USER@$SFTP_HOST" || true
