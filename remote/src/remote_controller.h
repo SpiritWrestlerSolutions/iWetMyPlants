@@ -42,10 +42,17 @@ public:
     bool isOverrideActive() const { return _override_active; }
 
     // Sensor data (used by RemoteWeb)
-    uint8_t getLastMoisturePercent() const { return _last_moisture_percent; }
-    uint16_t getLastRawValue() const { return _last_raw_value; }
-    const char* getSensorTypeName() const;
-    MoistureSensor* getSensor() { return _sensor.get(); }
+    uint8_t getSensorCount() const { return _sensor_count; }
+    uint8_t getLastMoisturePercent(uint8_t idx = 0) const {
+        return (idx < IWMP_MAX_SENSORS) ? _last_moisture_percent[idx] : 0;
+    }
+    uint16_t getLastRawValue(uint8_t idx = 0) const {
+        return (idx < IWMP_MAX_SENSORS) ? _last_raw_value[idx] : 0;
+    }
+    const char* getSensorTypeName(uint8_t idx = 0) const;
+    MoistureSensor* getSensor(uint8_t idx = 0) {
+        return (idx < IWMP_MAX_SENSORS) ? _sensors[idx].get() : nullptr;
+    }
 
     // Hub report status (used by RemoteWeb status page)
     uint32_t getLastHubReportTime() const { return _last_hub_report_sec; }
@@ -77,13 +84,14 @@ private:
     bool _override_active = false;
 
     // Subsystems
-    std::unique_ptr<MoistureSensor> _sensor;
+    std::unique_ptr<MoistureSensor> _sensors[IWMP_MAX_SENSORS];
+    uint8_t _sensor_count = 0;
     PowerModes _power;
     RemoteWeb* _web = nullptr;
 
     // Sensor cache
-    uint8_t _last_moisture_percent = 0;
-    uint16_t _last_raw_value = 0;
+    uint8_t _last_moisture_percent[IWMP_MAX_SENSORS] = {};
+    uint16_t _last_raw_value[IWMP_MAX_SENSORS] = {};
     uint32_t _last_sensor_read_time = 0;
 
     // Hub reporting
@@ -132,12 +140,13 @@ private:
     void handleLowPowerCycle();
 
     // Actions
-    void initSensor();
+    void initSensors();
     void initMqtt();
     void startWeb();
-    void readSensor();
+
     bool reportToHub();
     void publishMqtt();
+    void readSensors();
     void checkReboot();
     void checkOverrideButton();
 };

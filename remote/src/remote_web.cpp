@@ -293,15 +293,25 @@ async function saveMqtt(){
  }catch(e){msg('Error: '+e.message,false)}
 }
 
-async function saveSensor(){
- try{
-  var r=await fetch('/api/config/sensor',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({name:$('sname').value.trim(),
-    dry_value:parseInt($('sdry').value)||0,wet_value:parseInt($('swet').value)||0})});
-  var d=await r.json();
-  msg(d.message||'Saved',d.success);
- }catch(e){msg('Error: '+e.message,false)}
-}
+var _scfg=[];
+function loadSensorCfg(){var i=parseInt($('sidx').value)||0;
+var s=_scfg[i];if(!s)return;
+$('sen').checked=s.enabled;$('sname').value=s.name||'';
+$('stype').value=s.input_type||0;$('sadcpin').value=s.adc_pin||0;
+$('sadsch').value=s.ads_channel||0;$('sadsaddr').value=s.ads_address||72;
+$('sdry').value=s.dry_value||0;$('swet').value=s.wet_value||0;stypeChg();}
+function stypeChg(){var t=parseInt($('stype').value)||0;
+$('sadcrow').style.display=t===0?'':'none';
+$('sadsrow').style.display=t===1?'':'none';}
+async function saveSensor(){var i=parseInt($('sidx').value)||0;
+try{
+var r=await fetch('/api/config/sensor',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({index:i,enabled:$('sen').checked,name:$('sname').value.trim(),
+input_type:parseInt($('stype').value)||0,adc_pin:parseInt($('sadcpin').value)||0,
+ads_channel:parseInt($('sadsch').value)||0,ads_address:parseInt($('sadsaddr').value)||72,
+dry_value:parseInt($('sdry').value)||0,wet_value:parseInt($('swet').value)||0})});
+var d=await r.json();msg(d.message||'Saved',d.success);
+}catch(e){msg('Error: '+e.message,false)}}
 
 async function reboot(){
  if(!confirm('Reboot device?'))return;
@@ -323,8 +333,12 @@ fetch('/api/config').then(r=>r.json()).then(d=>{
  if(d.mqtt){$('mqen').checked=d.mqtt.enabled;$('mqbr').value=d.mqtt.broker||'';
   $('mqpt').value=d.mqtt.port||1883;$('mqus').value=d.mqtt.username||'';
   $('mqtp').value=d.mqtt.base_topic||'iwmp'}
- if(d.sensor){$('sname').value=d.sensor.name||'';$('stype').value=d.sensor.input_type_name||'';
-  $('sdry').value=d.sensor.dry_value||0;$('swet').value=d.sensor.wet_value||0}
+ if(d.sensors){_scfg=d.sensors;
+  var sel=$('sidx');sel.innerHTML='';
+  d.sensors.forEach(function(s){var o=document.createElement('option');
+   o.value=s.index;o.textContent=(s.name||'Sensor '+(s.index+1))+(s.enabled?'':' (off)');
+   sel.appendChild(o);});
+  if(d.sensors.length>0)loadSensorCfg();}
  if(d.system){$('did').value=d.system.device_id||'';
   $('heap').value=Math.round((d.system.free_heap||0)/1024)+' KB'}
  if(d.mode!==undefined){
@@ -670,14 +684,22 @@ void RemoteWeb::handlePostSensorConfig(AsyncWebServerRequest* request,
         return;
     }
 
-    auto& sensor = Config.getMoistureSensorMutable(0);
-    if (!doc["name"].isNull())      strlcpy(sensor.sensor_name, doc["name"] | "", sizeof(sensor.sensor_name));
-    sensor.dry_value = doc["dry_value"] | sensor.dry_value;
-    sensor.wet_value = doc["wet_value"] | sensor.wet_value;
+    uint8_t idx = doc["index"] | 0;
+    if (idx >= IWMP_MAX_SENSORS) idx = 0;
+
+    auto& sensor = Config.getMoistureSensorMutable(idx);
+    if (!doc["enabled"].isNull())     sensor.enabled = (bool)doc["enabled"];
+    if (!doc["name"].isNull())        strlcpy(sensor.sensor_name, doc["name"] | "", sizeof(sensor.sensor_name));
+    if (!doc["input_type"].isNull())  sensor.input_type = static_cast<SensorInputType>((int)doc["input_type"]);
+    if (!doc["adc_pin"].isNull())     sensor.adc_pin = (uint8_t)doc["adc_pin"];
+    if (!doc["ads_channel"].isNull()) sensor.ads_channel = (uint8_t)doc["ads_channel"];
+    if (!doc["ads_address"].isNull()) sensor.ads_i2c_address = (uint8_t)doc["ads_address"];
+    if (!doc["dry_value"].isNull())   sensor.dry_value = (uint16_t)doc["dry_value"];
+    if (!doc["wet_value"].isNull())   sensor.wet_value = (uint16_t)doc["wet_value"];
     Config.save();
 
-    LOG_I(TAG, "Sensor saved: %s (dry=%u, wet=%u)",
-          sensor.sensor_name, sensor.dry_value, sensor.wet_value);
+    LOG_I(TAG, "Sensor %d saved: %s (en=%d dry=%u wet=%u)",
+          idx, sensor.sensor_name, sensor.enabled, sensor.dry_value, sensor.wet_value);
     _ctrl->onSensorConfigChanged();
 
     request->send(200, "application/json",

@@ -40,7 +40,7 @@ void RemoteController::begin() {
     LOG_I(TAG, "Initializing Remote controller");
 
     _power.begin(Config.getPower());
-    initSensor();
+    initSensors();
 
     // Allocate web server — but DON'T call begin() yet.
     // AsyncWebServer::begin() needs lwIP initialized, which only
@@ -246,7 +246,7 @@ void RemoteController::handleRunning() {
         return;
     }
 
-    readSensor();
+    readSensors();
 
     // Report to Hub
     if (WiFiMgr.isConnected() &&
@@ -305,7 +305,7 @@ void RemoteController::handleStandalone() {
     WiFiMgr.loop();
 
     // Read sensor at regular intervals
-    readSensor();
+    readSensors();
 }
 
 // ============================================================
@@ -315,13 +315,14 @@ void RemoteController::handleStandalone() {
 void RemoteController::handleLowPowerCycle() {
     LOG_I(TAG, "=== Low Power Cycle (boot #%lu) ===", rtc_boot_count);
 
-    // 1. Read sensor (blocking — single averaged read)
-    if (_sensor && _sensor->isReady()) {
-        _last_raw_value = _sensor->readRawAveraged();
-        _last_moisture_percent = _sensor->rawToPercent(_last_raw_value);
-        LOG_I(TAG, "Sensor: %u%% (raw=%u)", _last_moisture_percent, _last_raw_value);
-    } else {
-        LOG_W(TAG, "Sensor not ready, sending with cached values");
+    // 1. Read all sensors (blocking)
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        if (_sensors[i] && _sensors[i]->isReady()) {
+            _last_raw_value[i] = _sensors[i]->readRawAveraged();
+            _last_moisture_percent[i] = _sensors[i]->rawToPercent(_last_raw_value[i]);
+            LOG_I(TAG, "Sensor %d: %u%% (raw=%u)", i,
+                  _last_moisture_percent[i], _last_raw_value[i]);
+        }
     }
 
     // 2. Init WiFi radio (STA mode, don't connect — just need radio for ESP-NOW)
@@ -380,19 +381,24 @@ void RemoteController::handleLowPowerCycle() {
             delay(50);  // Brief gap between messages
         }
 
-        // 7. Send MoistureReadingMsg
-        bool ok = EspNow.sendMoistureReading(
-            hub_mac,
-            0,  // sensor_index
-            _last_raw_value,
-            _last_moisture_percent
-        );
-
-        if (ok) {
+        // 7. Send all sensor readings via ESP-NOW
+        bool any_ok = false;
+        for (uint8_t si = 0; si < IWMP_MAX_SENSORS; si++) {
+            if (!_sensors[si]) continue;
+            bool ok = EspNow.sendMoistureReading(
+                hub_mac, si,
+                _last_raw_value[si],
+                _last_moisture_percent[si]
+            );
+            if (ok) { any_ok = true; }
+            else { LOG_W(TAG, "ESP-NOW send failed for sensor %d", si); }
+            delay(30);
+        }
+        if (any_ok) {
             LOG_I(TAG, "ESP-NOW send OK");
             _power.recordSuccessfulSend();
         } else {
-            LOG_W(TAG, "ESP-NOW send failed");
+            LOG_W(TAG, "ESP-NOW all sends failed");
             _power.recordFailedSend();
         }
 
@@ -443,34 +449,38 @@ void RemoteController::checkOverrideButton() {
 // Sensor
 // ============================================================
 
-void RemoteController::initSensor() {
-    const auto& cfg = Config.getMoistureSensor(0);
-    if (!cfg.enabled) {
-        LOG_W(TAG, "Sensor 0 disabled");
-        return;
-    }
+void RemoteController::initSensors() {
+    _sensor_count = 0;
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        const auto& cfg = Config.getMoistureSensor(i);
+        if (!cfg.enabled) continue;
 
-    _sensor = createMoistureSensor(cfg, 0);
-    if (_sensor) {
-        _sensor->begin();
-        LOG_I(TAG, "Sensor: %s (%s)", _sensor->getName(),
-              _sensor->getInputTypeName());
-    } else {
-        LOG_E(TAG, "Failed to create sensor");
+        _sensors[i] = createMoistureSensor(cfg, i);
+        if (_sensors[i]) {
+            _sensors[i]->begin();
+            _sensor_count++;
+            LOG_I(TAG, "Sensor %d: %s (%s)", i,
+                  _sensors[i]->getName(), _sensors[i]->getInputTypeName());
+        } else {
+            LOG_E(TAG, "Failed to create sensor %d", i);
+        }
     }
+    LOG_I(TAG, "Initialized %d sensor(s)", _sensor_count);
 }
 
-void RemoteController::readSensor() {
-    if (!_sensor || !_sensor->isReady()) return;
+void RemoteController::readSensors() {
     if ((millis() - _last_sensor_read_time) < SENSOR_READ_INTERVAL_MS) return;
-
     _last_sensor_read_time = millis();
-    _last_raw_value = _sensor->readRawAveraged();
-    _last_moisture_percent = _sensor->rawToPercent(_last_raw_value);
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        if (!_sensors[i] || !_sensors[i]->isReady()) continue;
+        _last_raw_value[i] = _sensors[i]->readRawAveraged();
+        _last_moisture_percent[i] = _sensors[i]->rawToPercent(_last_raw_value[i]);
+    }
 }
 
-const char* RemoteController::getSensorTypeName() const {
-    return _sensor ? _sensor->getInputTypeName() : "None";
+const char* RemoteController::getSensorTypeName(uint8_t idx) const {
+    return (idx < IWMP_MAX_SENSORS && _sensors[idx]) ?
+           _sensors[idx]->getInputTypeName() : "None";
 }
 
 // ============================================================
@@ -494,7 +504,18 @@ bool RemoteController::reportToHub() {
     doc["mac"] = mac_str;
     doc["device_name"] = Config.getDeviceName();
     doc["device_type"] = 1;  // REMOTE
-    doc["moisture_percent"] = _last_moisture_percent;
+    // Legacy field (first sensor) for backward compat
+    doc["moisture_percent"] = _last_moisture_percent[0];
+    // Full sensor array
+    JsonArray sarr = doc["sensors"].to<JsonArray>();
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        if (!_sensors[i]) continue;
+        JsonObject so = sarr.add<JsonObject>();
+        so["index"] = i;
+        so["name"] = Config.getMoistureSensor(i).sensor_name;
+        so["moisture_percent"] = _last_moisture_percent[i];
+        so["raw_value"] = _last_raw_value[i];
+    }
     doc["rssi"] = WiFi.RSSI();
     doc["firmware_version"] = IWMP_VERSION;
 
@@ -532,9 +553,9 @@ void RemoteController::initMqtt() {
 
     Mqtt.begin(cfg, Config.getIdentity());
     Mqtt.onConnect([this](bool) {
-        const auto& s = Config.getMoistureSensor(0);
-        if (s.enabled) {
-            Mqtt.publishMoistureDiscovery(0, s.sensor_name);
+        for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+            const auto& s = Config.getMoistureSensor(i);
+            if (s.enabled) Mqtt.publishMoistureDiscovery(i, s.sensor_name);
         }
         Mqtt.publishRssiDiscovery();
     });
@@ -547,11 +568,17 @@ void RemoteController::publishMqtt() {
     if (!Mqtt.isConnected()) return;
 
     SensorReadings readings = {};
-    readings.moisture_count = 1;
-    readings.moisture[0].valid = (_sensor && _sensor->isReady());
-    readings.moisture[0].index = 0;
-    readings.moisture[0].raw_value = _last_raw_value;
-    readings.moisture[0].percent = _last_moisture_percent;
+    readings.moisture_count = 0;
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        if (!_sensors[i] || !_sensors[i]->isReady()) continue;
+        uint8_t n = readings.moisture_count;
+        if (n >= (uint8_t)(sizeof(readings.moisture) / sizeof(readings.moisture[0]))) break;
+        readings.moisture[n].valid = true;
+        readings.moisture[n].index = i;
+        readings.moisture[n].raw_value = _last_raw_value[i];
+        readings.moisture[n].percent = _last_moisture_percent[i];
+        readings.moisture_count++;
+    }
     readings.rssi = WiFi.RSSI();
     readings.uptime_sec = millis() / 1000;
     readings.free_heap = ESP.getFreeHeap();
@@ -592,10 +619,12 @@ void RemoteController::startWeb() {
 // ============================================================
 
 void RemoteController::onSensorConfigChanged() {
-    if (_sensor) {
-        _sensor->updateConfig(Config.getMoistureSensor(0));
-        LOG_I(TAG, "Sensor config updated");
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        _sensors[i].reset();
     }
+    _sensor_count = 0;
+    initSensors();
+    LOG_I(TAG, "Sensor config updated, %d sensor(s) active", _sensor_count);
 }
 
 void RemoteController::scheduleReboot(uint32_t delay_ms) {
