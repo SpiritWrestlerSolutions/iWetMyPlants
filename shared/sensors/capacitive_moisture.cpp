@@ -6,8 +6,11 @@
 #include "capacitive_moisture.h" 
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
+#include "logger.h"
 
 namespace iwmp {
+
+static constexpr const char* TAG = "ADC";
 
 // ADC1 GPIO pins for different ESP32 variants
 #if CONFIG_IDF_TARGET_ESP32
@@ -60,13 +63,13 @@ void DirectAdcInput::begin() {
 
     // Warn if using ADC2 pin
     if (isAdc2GpioPin(_pin)) {
-        Serial.printf("[ADC] WARNING: GPIO %d is on ADC2, may conflict with WiFi!\n", _pin);
+        LOG_W(TAG, "GPIO %d is on ADC2, may conflict with WiFi!", _pin);
     }
 
     configureAdc();
     _initialized = true;
 
-    Serial.printf("[ADC] Initialized GPIO %d (ADC%d)\n", _pin, isAdc1GpioPin(_pin) ? 1 : 2);
+    LOG_I(TAG, "Initialized GPIO %d (ADC%d)", _pin, isAdc1GpioPin(_pin) ? 1 : 2);
 }
 
 uint16_t DirectAdcInput::readRaw() {

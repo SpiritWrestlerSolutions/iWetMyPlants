@@ -4,6 +4,7 @@
  */
 
 #include "api_endpoints.h"
+#include "../utils/logger.h"
 #include "../config/config_manager.h"
 #include "../utils/ota_manager.h"
 #include "../utils/error_tracker.h"
@@ -13,6 +14,8 @@
 #include <esp_mac.h>
 
 namespace iwmp {
+
+static constexpr const char* TAG = "API";
 
 // Static callback storage
 SensorDataCallback ApiEndpoints::s_sensor_callback = nullptr;
@@ -85,7 +88,7 @@ void ApiEndpoints::sendJson(AsyncWebServerRequest* request, JsonDocument& doc, i
 // ============ Route Registration ============
 
 void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
-    Serial.println("[API] Registering API routes...");
+    LOG_I(TAG, "Registering API routes...");
 
     // Status & System
     server.on("/api/status", HTTP_GET, handleGetStatus);
@@ -246,7 +249,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     );
 
     server.on("/api/config/sensors", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Serial.println("[API] GET /api/config/sensors");
+        LOG_D(TAG, "GET /api/config/sensors");
         handleGetConfigSection(request, "sensors");
     });
     server.on("/api/config/sensors", HTTP_POST,
@@ -374,7 +377,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         sendJson(request, doc);
     });
 
-        Serial.println("[API] Routes registered");
+        LOG_I(TAG, "Routes registered");
 }
 
 // ============ Status & System Handlers ============
@@ -549,7 +552,7 @@ void ApiEndpoints::handleGetConfigSection(AsyncWebServerRequest* request, const 
 
 void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const String& section,
                                            uint8_t* data, size_t len) {
-    Serial.printf("[API] POST /api/config/%s (%d bytes)\n", section.c_str(), len);
+    LOG_D(TAG, "POST /api/config/%s (%d bytes)", section.c_str(), len);
 
     if (len == 0) {
         sendError(request, 400, "Empty request body");
@@ -560,7 +563,7 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
     DeserializationError error = deserializeJson(doc, data, len);
 
     if (error) {
-        Serial.printf("[API] JSON parse error: %s\n", error.c_str());
+        LOG_E(TAG, "JSON parse error: %s", error.c_str());
         sendError(request, 400, "Invalid JSON");
         return;
     }
@@ -575,19 +578,19 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
         success = parseMqttConfig(obj);
     } else if (section == "sensors") {
         if (!doc.is<JsonArray>()) {
-            Serial.println("[API] Error: sensors data is not an array");
+            LOG_E(TAG, "Error: sensors data is not an array");
             sendError(request, 400, "Expected array for sensors");
             return;
         }
         JsonArray arr = doc.as<JsonArray>();
-        Serial.printf("[API] Saving sensors, array size: %d\n", arr.size());
+        LOG_D(TAG, "Saving sensors, array size: %d", arr.size());
         if (arr.size() == 0) {
-            Serial.println("[API] Error: sensors array is empty");
+            LOG_E(TAG, "Error: sensors array is empty");
             sendError(request, 400, "Empty sensors array");
             return;
         }
         success = parseSensorConfig(arr);
-        Serial.printf("[API] parseSensorConfig returned: %s\n", success ? "true" : "false");
+        LOG_D(TAG, "parseSensorConfig returned: %s", success ? "true" : "false");
     } else if (section == "relays") {
         JsonArray arr = doc.as<JsonArray>();
         success = parseRelayConfig(arr);
@@ -627,10 +630,10 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
 
     if (success) {
         Config.save();
-        Serial.println("[API] Config saved successfully");
+        LOG_I(TAG, "Config saved successfully");
         sendSuccess(request, "Configuration saved");
     } else {
-        Serial.println("[API] Failed to parse configuration");
+        LOG_E(TAG, "Failed to parse configuration");
         sendError(request, 400, "Failed to parse configuration");
     }
 }
@@ -1079,7 +1082,7 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
             continue;
         }
 
-        Serial.printf("[API] Processing sensor %d (%d fields)\n", index, sensor.size());
+        LOG_D(TAG, "Processing sensor %d (%d fields)", index, sensor.size());
 
         if (sensor["name"].is<const char*>()) {
             strlcpy(config.moisture_sensors[index].sensor_name, sensor["name"],
@@ -1106,12 +1109,12 @@ bool ApiEndpoints::parseSensorConfig(JsonArray& arr) {
                     // Switching TO ADS1115: use 16-bit defaults
                     config.moisture_sensors[index].dry_value = 45000;  // ADS1115 typical dry
                     config.moisture_sensors[index].wet_value = 18000;  // ADS1115 typical wet
-                    Serial.printf("[API] Auto-set ADS1115 calibration defaults for sensor %d\n", index);
+                    LOG_D(TAG, "Auto-set ADS1115 calibration defaults for sensor %d", index);
                 } else if (old_type == SensorInputType::ADS1115) {
                     // Switching FROM ADS1115: use 12-bit defaults
                     config.moisture_sensors[index].dry_value = 3500;   // Direct ADC typical dry
                     config.moisture_sensors[index].wet_value = 1500;   // Direct ADC typical wet
-                    Serial.printf("[API] Auto-set Direct ADC calibration defaults for sensor %d\n", index);
+                    LOG_D(TAG, "Auto-set Direct ADC calibration defaults for sensor %d", index);
                 }
             }
         }

@@ -5,11 +5,13 @@
 
 #include "captive_portal.h"
 #include <WiFi.h>
+#include "../utils/logger.h"
 
 namespace iwmp {
 
 // DNS server port
 static constexpr uint16_t DNS_PORT = 53;
+static constexpr const char* TAG = "Portal";
 
 // Default AP IP configuration
 static const IPAddress AP_IP(192, 168, 4, 1);
@@ -57,17 +59,17 @@ bool CaptivePortal::begin(const char* ap_ssid, const char* ap_password, uint32_t
     }
 
     if (!ap_started) {
-        Serial.println("[Portal] Failed to start AP");
+        LOG_E(TAG, "Failed to start AP");
         setState(PortalState::INACTIVE);
         return false;
     }
 
     _ap_ip = WiFi.softAPIP();
-    Serial.printf("[Portal] AP started: %s @ %s\n", _ap_ssid, _ap_ip.toString().c_str());
+    LOG_I(TAG, "AP started: %s @ %s", _ap_ssid, _ap_ip.toString().c_str());
 
     // Start DNS server (redirect all domains to AP IP)
     if (!_dns.start(DNS_PORT, "*", _ap_ip)) {
-        Serial.println("[Portal] Failed to start DNS");
+        LOG_E(TAG, "Failed to start DNS");
         WiFi.softAPdisconnect(true);
         setState(PortalState::INACTIVE);
         return false;
@@ -78,7 +80,7 @@ bool CaptivePortal::begin(const char* ap_ssid, const char* ap_password, uint32_t
     setupRoutes();
     _server->begin();
 
-    Serial.println("[Portal] Web server started");
+    LOG_I(TAG, "Web server started");
     setState(PortalState::ACTIVE);
 
     return true;
@@ -110,7 +112,7 @@ void CaptivePortal::stop() {
     WiFi.softAPdisconnect(true);
 
     setState(PortalState::INACTIVE);
-    Serial.println("[Portal] Stopped");
+    LOG_I(TAG, "Stopped");
 }
 
 void CaptivePortal::loop() {
@@ -123,7 +125,7 @@ void CaptivePortal::loop() {
 
     // Check timeout
     if (_timeout_ms > 0 && (millis() - _start_time) > _timeout_ms) {
-        Serial.println("[Portal] Timeout reached");
+        LOG_W(TAG, "Timeout reached");
         setState(PortalState::TIMEOUT);
         stop();
     }
@@ -155,13 +157,13 @@ bool CaptivePortal::tryConnect(const char* ssid, const char* password, uint32_t 
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("[Portal] Connected to %s, IP: %s\n",
+        LOG_I(TAG, "Connected to %s, IP: %s",
                       ssid, WiFi.localIP().toString().c_str());
         setState(PortalState::CONNECTED);
         return true;
     }
 
-    Serial.printf("[Portal] Failed to connect to %s\n", ssid);
+    LOG_W(TAG, "Failed to connect to %s", ssid);
     setState(PortalState::FAILED);
 
     // Return to AP-only mode
@@ -252,7 +254,7 @@ void CaptivePortal::handleCredentials(AsyncWebServerRequest* request) {
     String password = request->hasParam("password", true) ?
                       request->getParam("password", true)->value() : "";
 
-    Serial.printf("[Portal] Received credentials for: %s\n", ssid.c_str());
+    LOG_I(TAG, "Received credentials for: %s", ssid.c_str());
 
     // Notify callback
     bool should_connect = true;

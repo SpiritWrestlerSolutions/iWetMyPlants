@@ -6,6 +6,7 @@
 #include "espnow_manager.h"
 #include <esp_wifi.h>
 #include <esp_mac.h>
+#include "../utils/logger.h"
 
 namespace iwmp {
 
@@ -14,6 +15,7 @@ EspNowManager& EspNow = EspNowManager::getInstance();
 
 // Pointer for static callbacks
 static EspNowManager* s_instance = nullptr;
+static constexpr const char* TAG = "ESP-NOW";
 
 EspNowManager& EspNowManager::getInstance() {
     static EspNowManager instance;
@@ -54,7 +56,7 @@ bool EspNowManager::begin(uint8_t channel) {
 
     // Initialize ESP-NOW
     if (esp_now_init() != ESP_OK) {
-        Serial.println("[ESP-NOW] Init failed");
+        LOG_E(TAG, "Init failed");
         return false;
     }
 
@@ -69,7 +71,7 @@ bool EspNowManager::begin(uint8_t channel) {
 
     char mac_str[18];
     getMacString(mac_str, sizeof(mac_str));
-    Serial.printf("[ESP-NOW] Initialized on channel %d, MAC: %s\n", _channel, mac_str);
+    LOG_I(TAG, "Initialized on channel %d, MAC: %s", _channel, mac_str);
 
     return true;
 }
@@ -89,7 +91,7 @@ void EspNowManager::end() {
     _initialized = false;
     s_instance = nullptr;
 
-    Serial.println("[ESP-NOW] Shutdown");
+    LOG_I(TAG, "Shutdown");
 }
 
 void EspNowManager::getMacString(char* buffer, size_t size) const {
@@ -117,7 +119,7 @@ bool EspNowManager::send(const uint8_t* peer_mac, const uint8_t* data, size_t le
         return true;
     }
 
-    Serial.printf("[ESP-NOW] Send failed: %s\n", esp_err_to_name(result));
+    LOG_E(TAG, "Send failed: %s", esp_err_to_name(result));
     return false;
 }
 
@@ -207,7 +209,7 @@ bool EspNowManager::sendWithRetry(const uint8_t* peer_mac, const uint8_t* data, 
             return true;
         }
 
-        Serial.printf("[ESP-NOW] Retry %d/%d for seq %d\n",
+        LOG_D(TAG, "Retry %d/%d for seq %d",
                       attempt + 1, max_retries, mutable_header->sequence_number);
     }
 
@@ -386,7 +388,7 @@ bool EspNowManager::addPeer(const uint8_t* mac, uint8_t channel, bool encrypt,
 
     esp_err_t result = esp_now_add_peer(&peer_info);
     if (result != ESP_OK) {
-        Serial.printf("[ESP-NOW] Add peer failed: %s\n", esp_err_to_name(result));
+        LOG_E(TAG, "Add peer failed: %s", esp_err_to_name(result));
         return false;
     }
 
@@ -471,24 +473,23 @@ uint8_t EspNowManager::getNextSequence() {
 }
 
 void EspNowManager::printDebugInfo() const {
-    Serial.println("======== ESP-NOW Debug Info ========");
     char mac_str[18];
     formatMac(_own_mac, mac_str, sizeof(mac_str));
-    Serial.printf("MAC: %s\n", mac_str);
-    Serial.printf("Channel: %d\n", _channel);
-    Serial.printf("Initialized: %s\n", _initialized ? "yes" : "no");
-    Serial.printf("Peers: %d\n", getPeerCount());
-    Serial.println();
-    Serial.println("--- Statistics ---");
-    Serial.printf("  Packets sent: %u\n", _stats.packets_sent);
-    Serial.printf("  Packets received: %u\n", _stats.packets_received);
-    Serial.printf("  Packets lost: %u\n", _stats.packets_lost);
-    Serial.printf("  ACKs received: %u\n", _stats.acks_received);
-    Serial.printf("  ACKs timeout: %u\n", _stats.acks_timeout);
-    Serial.printf("  Retries: %u\n", _stats.retries);
-    Serial.printf("  Duplicates filtered: %u\n", _stats.duplicates_filtered);
-    Serial.printf("  Delivery rate: %.1f%%\n", _stats.getDeliveryRate());
-    Serial.println("====================================");
+    LOG_D(TAG, "======== ESP-NOW Debug Info ========");
+    LOG_D(TAG, "MAC: %s", mac_str);
+    LOG_D(TAG, "Channel: %d", _channel);
+    LOG_D(TAG, "Initialized: %s", _initialized ? "yes" : "no");
+    LOG_D(TAG, "Peers: %d", getPeerCount());
+    LOG_D(TAG, "--- Statistics ---");
+    LOG_D(TAG, "  Packets sent: %u", _stats.packets_sent);
+    LOG_D(TAG, "  Packets received: %u", _stats.packets_received);
+    LOG_D(TAG, "  Packets lost: %u", _stats.packets_lost);
+    LOG_D(TAG, "  ACKs received: %u", _stats.acks_received);
+    LOG_D(TAG, "  ACKs timeout: %u", _stats.acks_timeout);
+    LOG_D(TAG, "  Retries: %u", _stats.retries);
+    LOG_D(TAG, "  Duplicates filtered: %u", _stats.duplicates_filtered);
+    LOG_D(TAG, "  Delivery rate: %.1f%%", _stats.getDeliveryRate());
+    LOG_D(TAG, "====================================");
 }
 
 // ============ Private Methods ============
@@ -599,7 +600,7 @@ void EspNowManager::onDataRecv(const uint8_t* mac, const uint8_t* data, int len)
 
     // Check protocol version
     if (header->protocol_version != PROTOCOL_VERSION) {
-        Serial.printf("[ESP-NOW] Protocol version mismatch: %d vs %d\n",
+        LOG_W(TAG, "Protocol version mismatch: %d vs %d",
                       header->protocol_version, PROTOCOL_VERSION);
         return;
     }

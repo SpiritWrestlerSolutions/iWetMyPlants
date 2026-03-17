@@ -4,8 +4,11 @@
  */
 
 #include "mux_moisture.h"
+#include "logger.h"
 
 namespace iwmp {
+
+static constexpr const char* TAG = "MUX";
 
 // Static MuxManager instances
 MuxInput* MuxManager::s_mux_instances[4] = {nullptr, nullptr, nullptr, nullptr};
@@ -51,7 +54,7 @@ void MuxInput::begin() {
 
     _initialized = true;
 
-    Serial.printf("[MUX] Initialized on SIG=%d, S0-S3=%d,%d,%d,%d\n",
+    LOG_I(TAG, "Initialized on SIG=%d, S0-S3=%d,%d,%d,%d",
                   _sig_pin, _select_pins[0], _select_pins[1],
                   _select_pins[2], _select_pins[3]);
 }

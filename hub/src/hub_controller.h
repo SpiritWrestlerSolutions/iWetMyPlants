@@ -186,10 +186,6 @@ private:
      */
     void initializeLocalSensors();
 
-    /**
-     * @brief Process local sensors
-     */
-    void processLocalSensors();
     void doBackgroundPoll();
     void loadPollInterval();
     void savePollInterval(uint32_t interval_sec);

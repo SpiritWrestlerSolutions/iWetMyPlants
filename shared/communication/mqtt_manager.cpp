@@ -5,6 +5,7 @@
 
 #include "mqtt_manager.h"
 #include <WiFi.h>
+#include "../utils/logger.h"
 
 namespace iwmp {
 
@@ -13,6 +14,7 @@ MqttManager& Mqtt = MqttManager::getInstance();
 
 // Static pointer for callbacks
 static MqttManager* s_mqtt_instance = nullptr;
+static constexpr const char* TAG = "MQTT";
 
 MqttManager& MqttManager::getInstance() {
     static MqttManager instance;
@@ -68,7 +70,7 @@ bool MqttManager::begin(const MqttConfig& config, const DeviceIdentity& identity
 
     _initialized = true;
 
-    Serial.printf("[MQTT] Initialized for broker %s:%d\n", _config.broker, _config.port);
+    LOG_I(TAG, "Initialized for broker %s:%d", _config.broker, _config.port);
 
     return true;
 }
@@ -86,7 +88,7 @@ void MqttManager::end() {
     _initialized = false;
     s_mqtt_instance = nullptr;
 
-    Serial.println("[MQTT] Shutdown");
+    LOG_I(TAG, "Shutdown");
 }
 
 void MqttManager::updateConfig(const MqttConfig& config) {
@@ -125,11 +127,11 @@ void MqttManager::connect() {
     }
 
     if (!WiFi.isConnected()) {
-        Serial.println("[MQTT] Cannot connect - WiFi not connected");
+        LOG_W(TAG, "Cannot connect - WiFi not connected");
         return;
     }
 
-    Serial.printf("[MQTT] Connecting to %s:%d...\n", _config.broker, _config.port);
+    LOG_I(TAG, "Connecting to %s:%d...", _config.broker, _config.port);
     _connecting = true;
     _client.connect();
 }
@@ -160,7 +162,7 @@ void MqttManager::loop() {
 
             if (_reconnect_attempts < MQTT_MAX_RECONNECT_ATTEMPTS) {
                 _reconnect_attempts++;
-                Serial.printf("[MQTT] Reconnect attempt %d/%d\n",
+                LOG_D(TAG, "Reconnect attempt %d/%d",
                               _reconnect_attempts, MQTT_MAX_RECONNECT_ATTEMPTS);
                 connect();
             }
@@ -175,7 +177,7 @@ void MqttManager::publishDiscovery() {
         return;
     }
 
-    Serial.println("[MQTT] Publishing HA discovery...");
+    LOG_I(TAG, "Publishing HA discovery...");
 
     // Publish RSSI sensor for all devices
     publishRssiDiscovery();
@@ -469,16 +471,16 @@ String MqttManager::getDiscoveryTopic(const char* component, const char* entity)
 // ============ Debug ============
 
 void MqttManager::printDebugInfo() const {
-    Serial.println("======== MQTT Debug Info ========");
-    Serial.printf("Initialized: %s\n", _initialized ? "yes" : "no");
-    Serial.printf("Enabled: %s\n", _config.enabled ? "yes" : "no");
-    Serial.printf("Connected: %s\n", isConnected() ? "yes" : "no");
-    Serial.printf("Broker: %s:%d\n", _config.broker, _config.port);
-    Serial.printf("Base topic: %s\n", _config.base_topic);
-    Serial.printf("HA discovery: %s\n", _config.ha_discovery_enabled ? "yes" : "no");
-    Serial.printf("State topic: %s\n", _state_topic.c_str());
-    Serial.printf("Availability topic: %s\n", _availability_topic.c_str());
-    Serial.println("=================================");
+    LOG_D(TAG, "======== MQTT Debug Info ========");
+    LOG_D(TAG, "Initialized: %s", _initialized ? "yes" : "no");
+    LOG_D(TAG, "Enabled: %s", _config.enabled ? "yes" : "no");
+    LOG_D(TAG, "Connected: %s", isConnected() ? "yes" : "no");
+    LOG_D(TAG, "Broker: %s:%d", _config.broker, _config.port);
+    LOG_D(TAG, "Base topic: %s", _config.base_topic);
+    LOG_D(TAG, "HA discovery: %s", _config.ha_discovery_enabled ? "yes" : "no");
+    LOG_D(TAG, "State topic: %s", _state_topic.c_str());
+    LOG_D(TAG, "Availability topic: %s", _availability_topic.c_str());
+    LOG_D(TAG, "=================================");
 }
 
 // ============ Private Methods ============
@@ -487,7 +489,7 @@ void MqttManager::onMqttConnect(bool session_present) {
     _connecting = false;
     _reconnect_attempts = 0;
 
-    Serial.printf("[MQTT] Connected (session: %s)\n", session_present ? "present" : "new");
+    LOG_I(TAG, "Connected (session: %s)", session_present ? "present" : "new");
 
     // Publish availability
     publishAvailability(true);
@@ -533,7 +535,7 @@ void MqttManager::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
             break;
     }
 
-    Serial.printf("[MQTT] Disconnected: %s\n", reason_str);
+    LOG_W(TAG, "Disconnected: %s", reason_str);
 
     if (_disconnect_callback) {
         _disconnect_callback(reason);
@@ -582,7 +584,7 @@ void MqttManager::subscribeToCommands() {
     String cmd_wildcard = _command_base_topic + "/#";
     subscribe(cmd_wildcard.c_str());
 
-    Serial.printf("[MQTT] Subscribed to %s\n", cmd_wildcard.c_str());
+    LOG_D(TAG, "Subscribed to %s", cmd_wildcard.c_str());
 }
 
 void MqttManager::handleRelayCommand(const char* payload, size_t len) {

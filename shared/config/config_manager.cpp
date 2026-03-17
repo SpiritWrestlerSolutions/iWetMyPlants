@@ -6,8 +6,11 @@
 #include "config_manager.h"
 #include <esp_mac.h>
 #include <esp_crc.h>
+#include "../utils/logger.h"
 
 namespace iwmp {
+
+static constexpr const char* TAG = "Config";
 
 // Global config manager reference
 ConfigManager& Config = ConfigManager::getInstance();
@@ -34,7 +37,7 @@ bool ConfigManager::begin(DeviceType type) {
     // Try to load from NVS
     if (!load()) {
         // No valid config in NVS, save defaults
-        Serial.println("[Config] No valid config found, using defaults");
+        LOG_I(TAG, "No valid config found, using defaults");
         save();
     }
 
@@ -44,21 +47,21 @@ bool ConfigManager::begin(DeviceType type) {
 
 bool ConfigManager::load() {
     if (!_prefs.begin(NVS_NAMESPACE, true)) {  // Read-only mode
-        Serial.println("[Config] Failed to open NVS namespace");
+        LOG_E(TAG, "Failed to open NVS namespace");
         return false;
     }
 
     // Check if config blob exists
     size_t stored_size = _prefs.getBytesLength(KEY_CONFIG_BLOB);
     if (stored_size == 0) {
-        Serial.println("[Config] No config blob found in NVS");
+        LOG_D(TAG, "No config blob found in NVS");
         _prefs.end();
         return false;
     }
 
     // Check size matches
     if (stored_size != sizeof(DeviceConfig)) {
-        Serial.printf("[Config] Size mismatch: stored=%u, expected=%u\n",
+        LOG_E(TAG, "Size mismatch: stored=%u, expected=%u",
                       stored_size, sizeof(DeviceConfig));
         _prefs.end();
         return false;
@@ -70,13 +73,13 @@ bool ConfigManager::load() {
     _prefs.end();
 
     if (read_size != sizeof(DeviceConfig)) {
-        Serial.println("[Config] Failed to read config blob");
+        LOG_E(TAG, "Failed to read config blob");
         return false;
     }
 
     // Verify magic number
     if (temp_config.magic != CONFIG_MAGIC) {
-        Serial.printf("[Config] Invalid magic: 0x%08X (expected 0x%08X)\n",
+        LOG_E(TAG, "Invalid magic: 0x%08X (expected 0x%08X)",
                       temp_config.magic, CONFIG_MAGIC);
         return false;
     }
@@ -90,7 +93,7 @@ bool ConfigManager::load() {
                                             sizeof(DeviceConfig) - sizeof(uint32_t));
 
     if (calculated_crc != stored_crc) {
-        Serial.printf("[Config] CRC mismatch: stored=0x%08X, calculated=0x%08X\n",
+        LOG_E(TAG, "CRC mismatch: stored=0x%08X, calculated=0x%08X",
                       stored_crc, calculated_crc);
         return false;
     }
@@ -104,11 +107,11 @@ bool ConfigManager::load() {
 
     // Check for migration
     if (needsMigration()) {
-        Serial.println("[Config] Config migration needed");
+        LOG_I(TAG, "Config migration needed");
         migrate();
     }
 
-    Serial.printf("[Config] Loaded config v%u (%u bytes)\n",
+    LOG_I(TAG, "Loaded config v%u (%u bytes)",
                   _config.config_version, sizeof(DeviceConfig));
     return true;
 }
@@ -118,7 +121,7 @@ bool ConfigManager::save() {
     updateCrc();
 
     if (!_prefs.begin(NVS_NAMESPACE, false)) {  // Read-write mode
-        Serial.println("[Config] Failed to open NVS namespace for writing");
+        LOG_E(TAG, "Failed to open NVS namespace for writing");
         return false;
     }
 
@@ -127,12 +130,12 @@ bool ConfigManager::save() {
     _prefs.end();
 
     if (written != sizeof(DeviceConfig)) {
-        Serial.printf("[Config] Failed to write config: wrote %u of %u bytes\n",
+        LOG_E(TAG, "Failed to write config: wrote %u of %u bytes",
                       written, sizeof(DeviceConfig));
         return false;
     }
 
-    Serial.printf("[Config] Saved config (%u bytes, CRC=0x%08X)\n",
+    LOG_I(TAG, "Saved config (%u bytes, CRC=0x%08X)",
                   sizeof(DeviceConfig), _config.crc32);
 
     // Notify listeners
@@ -142,7 +145,7 @@ bool ConfigManager::save() {
 }
 
 bool ConfigManager::resetToDefaults(bool save_immediately) {
-    Serial.println("[Config] Resetting to factory defaults");
+    LOG_I(TAG, "Resetting to factory defaults");
 
     // Preserve device ID before reset
     char device_id[13];
@@ -163,7 +166,7 @@ bool ConfigManager::resetToDefaults(bool save_immediately) {
 }
 
 bool ConfigManager::eraseAll() {
-    Serial.println("[Config] Erasing all configuration from NVS");
+    LOG_I(TAG, "Erasing all configuration from NVS");
 
     if (!_prefs.begin(NVS_NAMESPACE, false)) {
         return false;
@@ -354,82 +357,66 @@ bool ConfigManager::migrate() {
     // Set to current version
     _config.config_version = CONFIG_VERSION;
 
-    Serial.printf("[Config] Migrated from v%u to v%u\n", old_version, CONFIG_VERSION);
+    LOG_I(TAG, "Migrated from v%u to v%u", old_version, CONFIG_VERSION);
     return true;
 }
 
 // ============ Debug ============
 
 void ConfigManager::printConfig() const {
-    Serial.println("======== Device Configuration ========");
-    Serial.printf("Magic: 0x%08X\n", _config.magic);
-    Serial.printf("Version: %u\n", _config.config_version);
-    Serial.printf("Size: %u bytes\n", sizeof(DeviceConfig));
-    Serial.printf("CRC32: 0x%08X\n", _config.crc32);
-    Serial.println();
-
-    Serial.println("--- Identity ---");
-    Serial.printf("  Name: %s\n", _config.identity.device_name);
-    Serial.printf("  ID: %s\n", _config.identity.device_id);
-    Serial.printf("  Type: %u\n", _config.identity.device_type);
-    Serial.printf("  Firmware: %s\n", _config.identity.firmware_version);
-    Serial.println();
-
-    Serial.println("--- WiFi ---");
-    Serial.printf("  SSID: %s\n", _config.wifi.ssid[0] ? _config.wifi.ssid : "(not set)");
-    Serial.printf("  Static IP: %s\n", _config.wifi.use_static_ip ? "yes" : "no");
-    Serial.printf("  Channel: %u\n", _config.wifi.wifi_channel);
-    Serial.println();
-
-    Serial.println("--- MQTT ---");
-    Serial.printf("  Enabled: %s\n", _config.mqtt.enabled ? "yes" : "no");
-    Serial.printf("  Broker: %s:%u\n", _config.mqtt.broker, _config.mqtt.port);
-    Serial.printf("  Base Topic: %s\n", _config.mqtt.base_topic);
-    Serial.printf("  HA Discovery: %s\n", _config.mqtt.ha_discovery_enabled ? "yes" : "no");
-    Serial.println();
-
-    Serial.println("--- ESP-NOW ---");
-    Serial.printf("  Enabled: %s\n", _config.espnow.enabled ? "yes" : "no");
-    Serial.printf("  Channel: %u\n", _config.espnow.channel);
-    Serial.printf("  Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+    LOG_D(TAG, "======== Device Configuration ========");
+    LOG_D(TAG, "Magic: 0x%08X", _config.magic);
+    LOG_D(TAG, "Version: %u", _config.config_version);
+    LOG_D(TAG, "Size: %u bytes", sizeof(DeviceConfig));
+    LOG_D(TAG, "CRC32: 0x%08X", _config.crc32);
+    LOG_D(TAG, "--- Identity ---");
+    LOG_D(TAG, "  Name: %s", _config.identity.device_name);
+    LOG_D(TAG, "  ID: %s", _config.identity.device_id);
+    LOG_D(TAG, "  Type: %u", _config.identity.device_type);
+    LOG_D(TAG, "  Firmware: %s", _config.identity.firmware_version);
+    LOG_D(TAG, "--- WiFi ---");
+    LOG_D(TAG, "  SSID: %s", _config.wifi.ssid[0] ? _config.wifi.ssid : "(not set)");
+    LOG_D(TAG, "  Static IP: %s", _config.wifi.use_static_ip ? "yes" : "no");
+    LOG_D(TAG, "  Channel: %u", _config.wifi.wifi_channel);
+    LOG_D(TAG, "--- MQTT ---");
+    LOG_D(TAG, "  Enabled: %s", _config.mqtt.enabled ? "yes" : "no");
+    LOG_D(TAG, "  Broker: %s:%u", _config.mqtt.broker, _config.mqtt.port);
+    LOG_D(TAG, "  Base Topic: %s", _config.mqtt.base_topic);
+    LOG_D(TAG, "  HA Discovery: %s", _config.mqtt.ha_discovery_enabled ? "yes" : "no");
+    LOG_D(TAG, "--- ESP-NOW ---");
+    LOG_D(TAG, "  Enabled: %s", _config.espnow.enabled ? "yes" : "no");
+    LOG_D(TAG, "  Channel: %u", _config.espnow.channel);
+    LOG_D(TAG, "  Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X",
                   _config.espnow.hub_mac[0], _config.espnow.hub_mac[1],
                   _config.espnow.hub_mac[2], _config.espnow.hub_mac[3],
                   _config.espnow.hub_mac[4], _config.espnow.hub_mac[5]);
-    Serial.println();
-
-    Serial.println("--- Moisture Sensors ---");
+    LOG_D(TAG, "--- Moisture Sensors ---");
     for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
         const auto& sensor = _config.moisture_sensors[i];
         if (sensor.enabled) {
-            Serial.printf("  [%u] %s: pin=%u, dry=%u, wet=%u\n",
+            LOG_D(TAG, "  [%u] %s: pin=%u, dry=%u, wet=%u",
                           i, sensor.sensor_name, sensor.adc_pin,
                           sensor.dry_value, sensor.wet_value);
         }
     }
-    Serial.println();
-
     if (_config.identity.device_type == static_cast<uint8_t>(DeviceType::GREENHOUSE)) {
-        Serial.println("--- Relays ---");
+        LOG_D(TAG, "--- Relays ---");
         for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
             const auto& relay = _config.relays[i];
             if (relay.enabled) {
-                Serial.printf("  [%u] %s: pin=%u, active_low=%s\n",
+                LOG_D(TAG, "  [%u] %s: pin=%u, active_low=%s",
                               i, relay.relay_name, relay.gpio_pin,
                               relay.active_low ? "yes" : "no");
             }
         }
-        Serial.println();
     }
-
     if (_config.identity.device_type == static_cast<uint8_t>(DeviceType::REMOTE)) {
-        Serial.println("--- Power ---");
-        Serial.printf("  Battery Powered: %s\n", _config.power.battery_powered ? "yes" : "no");
-        Serial.printf("  Sleep Duration: %u sec\n", _config.power.deep_sleep_duration_sec);
-        Serial.printf("  Low Battery: %.2fV\n", _config.power.low_battery_voltage);
-        Serial.println();
+        LOG_D(TAG, "--- Power ---");
+        LOG_D(TAG, "  Battery Powered: %s", _config.power.battery_powered ? "yes" : "no");
+        LOG_D(TAG, "  Sleep Duration: %u sec", _config.power.deep_sleep_duration_sec);
+        LOG_D(TAG, "  Low Battery: %.2fV", _config.power.low_battery_voltage);
     }
-
-    Serial.println("======================================");
+    LOG_D(TAG, "======================================");
 }
 
 // ============ Private Methods ============

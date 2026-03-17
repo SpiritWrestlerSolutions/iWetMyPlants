@@ -5,11 +5,13 @@
 
 #include "ads1115_moisture.h"
 #include <Wire.h>
+#include "logger.h"
 
 namespace iwmp {
 
 // Static shared ADC instances
 Adafruit_ADS1115 Ads1115Input::s_adc_instances[4];
+static constexpr const char* TAG = "ADS1115";
 bool Ads1115Input::s_adc_initialized[4] = {false, false, false, false};
 TwoWire* Ads1115Input::s_adc_wire[4] = {nullptr, nullptr, nullptr, nullptr};
 SemaphoreHandle_t Ads1115Input::s_i2c_mutex[4] = {nullptr, nullptr, nullptr, nullptr};
@@ -22,7 +24,7 @@ void Ads1115Input::setWireForAddress(uint8_t address, TwoWire* wire) {
         if (!s_i2c_mutex[idx]) {
             s_i2c_mutex[idx] = xSemaphoreCreateMutex();
         }
-        Serial.printf("[ADS1115] Address 0x%02X assigned to %s\n",
+        LOG_D(TAG, "Address 0x%02X assigned to %s",
                       address, (wire == &Wire) ? "Wire" : "Wire1");
     }
 }
@@ -40,7 +42,7 @@ void Ads1115Input::begin() {
     // Get index for shared instance (0x48 -> 0, 0x49 -> 1, etc.)
     uint8_t instance_idx = _address - 0x48;
     if (instance_idx >= 4) {
-        Serial.printf("[ADS1115] Invalid address 0x%02X\n", _address);
+        LOG_E(TAG, "Invalid address 0x%02X", _address);
         return;
     }
 
@@ -62,19 +64,18 @@ void Ads1115Input::begin() {
         _wire->beginTransmission(_address);
         uint8_t i2c_err = _wire->endTransmission();
         if (i2c_err != 0) {
-            Serial.printf("[ADS1115] No device at 0x%02X (I2C err=%d). "
-                          "Check wiring and ADDR pin.\n", _address, i2c_err);
+            LOG_E(TAG, "No device at 0x%02X (I2C err=%d). Check wiring and ADDR pin.", _address, i2c_err);
             return;
         }
-        Serial.printf("[ADS1115] Device detected at 0x%02X, initializing driver...\n", _address);
+        LOG_I(TAG, "Device detected at 0x%02X, initializing driver...", _address);
 
         // Pass the correct Wire instance for this address
         if (!s_adc_instances[instance_idx].begin(_address, _wire)) {
-            Serial.printf("[ADS1115] Adafruit driver init failed at 0x%02X\n", _address);
+            LOG_E(TAG, "Adafruit driver init failed at 0x%02X", _address);
             return;
         }
         s_adc_initialized[instance_idx] = true;
-        Serial.printf("[ADS1115] Initialized ADC at 0x%02X on %s\n",
+        LOG_I(TAG, "Initialized ADC at 0x%02X on %s",
                       _address, (_wire == &Wire) ? "Wire" : "Wire1");
     }
 
@@ -85,7 +86,7 @@ void Ads1115Input::begin() {
     applyDataRate();
 
     _initialized = true;
-    Serial.printf("[ADS1115] Channel %d ready on 0x%02X\n", _channel, _address);
+    LOG_I(TAG, "Channel %d ready on 0x%02X", _channel, _address);
 }
 
 uint16_t Ads1115Input::readRaw() {
@@ -110,7 +111,7 @@ uint16_t Ads1115Input::readRaw() {
         } else {
             return 0;
         }
-        Serial.printf("[ADS1115] Device 0x%02X responding again, resuming reads\n", _address);
+        LOG_I(TAG, "Device 0x%02X responding again, resuming reads", _address);
         _consecutive_errors = 0;
     }
 
@@ -167,7 +168,7 @@ int16_t Ads1115Input::readADCSafe(uint8_t channel) {
     } else {
         _consecutive_errors++;
         if (_consecutive_errors == MAX_CONSECUTIVE_ERRORS) {
-            Serial.printf("[ADS1115] 0x%02X ch%d: %d consecutive errors, pausing reads\n",
+            LOG_W(TAG, "0x%02X ch%d: %d consecutive errors, pausing reads",
                           _address, _channel, _consecutive_errors);
         }
     }
@@ -230,7 +231,7 @@ int16_t Ads1115Input::readDifferential(uint8_t pos_channel, uint8_t neg_channel)
         return _adc->readADC_Differential_2_3();
     }
 
-    Serial.println("[ADS1115] Invalid differential channel pair");
+    LOG_E(TAG, "Invalid differential channel pair");
     return 0;
 }
 

@@ -4,11 +4,14 @@
  */
 
 #include "web_server.h"
+#include "../utils/logger.h"
 #include "api_endpoints.h"
 #include "../utils/ota_manager.h"
 #include "../calibration/rapid_read.h"
 
 namespace iwmp {
+
+static constexpr const char* TAG = "Web";
 
 // Forward declarations for embedded HTML/CSS/JS getters
 const char* getIndexHtml();
@@ -52,14 +55,14 @@ bool WebServer::begin(const DeviceIdentity& identity) {
     // Create server
     _server = new AsyncWebServer(WEB_SERVER_PORT);
     if (!_server) {
-        Serial.println("[Web] Failed to create server");
+        LOG_E(TAG, "Failed to create server");
         return false;
     }
 
     // Create WebSocket
     _ws = new AsyncWebSocket("/ws");
     if (!_ws) {
-        Serial.println("[Web] Failed to create WebSocket");
+        LOG_E(TAG, "Failed to create WebSocket");
         delete _server;
         _server = nullptr;
         return false;
@@ -86,7 +89,7 @@ bool WebServer::begin(const DeviceIdentity& identity) {
     _server->begin();
     _running = true;
 
-    Serial.printf("[Web] Server started on port %d\n", WEB_SERVER_PORT);
+    LOG_I(TAG, "Server started on port %d", WEB_SERVER_PORT);
     return true;
 }
 
@@ -120,7 +123,7 @@ void WebServer::end() {
     }
 
     _running = false;
-    Serial.println("[Web] Server stopped");
+    LOG_I(TAG, "Server stopped");
 }
 
 void WebServer::registerRoutes() {
@@ -208,12 +211,12 @@ void WebServer::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
                           AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
         case WS_EVT_CONNECT:
-            Serial.printf("[WS] Client #%u connected from %s\n",
+            LOG_D(TAG, "WS client #%u connected from %s",
                           client->id(), client->remoteIP().toString().c_str());
             break;
 
         case WS_EVT_DISCONNECT:
-            Serial.printf("[WS] Client #%u disconnected\n", client->id());
+            LOG_D(TAG, "WS client #%u disconnected", client->id());
             break;
 
         case WS_EVT_DATA: {
@@ -268,24 +271,24 @@ void WebServer::registerStaticRoutes() {
 
     // Settings sub-pages (register before /settings)
     _server->on("/settings/wifi", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /settings/wifi");
+        LOG_D(TAG, "GET /settings/wifi");
         sendHtmlNoCache(request, getWifiSettingsHtml());
     });
 
     _server->on("/settings/mqtt", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /settings/mqtt");
+        LOG_D(TAG, "GET /settings/mqtt");
         sendHtmlNoCache(request, getMqttSettingsHtml());
     });
 
     // Sensors sub-pages (register before /sensors)
     _server->on("/sensors/calibrate", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /sensors/calibrate");
+        LOG_D(TAG, "GET /sensors/calibrate");
         sendHtmlNoCache(request, getCalibrationHtml());
     });
 
     // Main pages
     _server->on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /");
+        LOG_D(TAG, "GET /");
         if (_identity.device_type == static_cast<uint8_t>(DeviceType::GREENHOUSE)) {
             sendHtmlNoCache(request, getGreenhouseDashboardHtml());
         } else {
@@ -294,7 +297,7 @@ void WebServer::registerStaticRoutes() {
     });
 
     _server->on("/settings", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /settings");
+        LOG_D(TAG, "GET /settings");
         if (_identity.device_type == static_cast<uint8_t>(DeviceType::GREENHOUSE)) {
             sendHtmlNoCache(request, getGreenhouseSettingsHtml());
         } else {
@@ -303,12 +306,12 @@ void WebServer::registerStaticRoutes() {
     });
 
     _server->on("/settings/hardware", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /settings/hardware");
+        LOG_D(TAG, "GET /settings/hardware");
         sendHtmlNoCache(request, getGreenhouseHardwareSettingsHtml());
     });
 
     _server->on("/sensors", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /sensors");
+        LOG_D(TAG, "GET /sensors");
         if (_identity.device_type == static_cast<uint8_t>(DeviceType::GREENHOUSE)) {
             sendHtmlNoCache(request, getGreenhouseSensorsHtml());
         } else {
@@ -317,7 +320,7 @@ void WebServer::registerStaticRoutes() {
     });
 
     _server->on("/relays", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /relays");
+        LOG_D(TAG, "GET /relays");
         if (_identity.device_type == static_cast<uint8_t>(DeviceType::GREENHOUSE)) {
             sendHtmlNoCache(request, getGreenhouseRelaysHtml());
         } else {
@@ -326,7 +329,7 @@ void WebServer::registerStaticRoutes() {
     });
 
     _server->on("/devices", HTTP_GET, [](AsyncWebServerRequest* request) {
-        Serial.println("[Web] GET /devices");
+        LOG_D(TAG, "GET /devices");
         sendHtmlNoCache(request, getDevicesHtml());
     });
 
@@ -380,7 +383,7 @@ void WebServer::registerStaticRoutes() {
             request->send(404, "application/json", "{\"error\":\"Not found\"}");
             return;
         }
-        Serial.printf("[Web] Redirect: %s -> captive portal\n", request->url().c_str());
+        LOG_D(TAG, "Redirect: %s -> captive portal", request->url().c_str());
         request->redirect(CAPTIVE_REDIRECT);
     });
 }

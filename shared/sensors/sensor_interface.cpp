@@ -7,8 +7,11 @@
 #include "capacitive_moisture.h"
 #include "ads1115_moisture.h"
 #include "mux_moisture.h"
+#include "logger.h"
 
 namespace iwmp {
+
+static constexpr const char* TAG = "Sensor";
 
 // ============ MoistureSensor Implementation ============
 
@@ -26,7 +29,7 @@ void MoistureSensor::begin() {
     _initialized = _input->isReady();
 
     if (_initialized) {
-        Serial.printf("[Sensor] %s initialized using %s\n",
+        LOG_I(TAG, "%s initialized using %s",
                       _config.sensor_name, _input->getTypeName());
     }
 }
@@ -115,7 +118,7 @@ void MoistureSensor::calibrateDry() {
     }
 
     _config.dry_value = readRawAveraged();
-    Serial.printf("[Sensor] %s dry calibration: %u\n", _config.sensor_name, _config.dry_value);
+    LOG_I(TAG, "%s dry calibration: %u", _config.sensor_name, _config.dry_value);
 }
 
 void MoistureSensor::calibrateWet() {
@@ -124,7 +127,7 @@ void MoistureSensor::calibrateWet() {
     }
 
     _config.wet_value = readRawAveraged();
-    Serial.printf("[Sensor] %s wet calibration: %u\n", _config.sensor_name, _config.wet_value);
+    LOG_I(TAG, "%s wet calibration: %u", _config.sensor_name, _config.wet_value);
 }
 
 bool MoistureSensor::isCalibrated() const {
@@ -173,12 +176,12 @@ std::unique_ptr<ISensorInput> createSensorInput(const MoistureSensorConfig& conf
             // For MUX, we need additional configuration not in MoistureSensorConfig
             // This is a simplified version - real implementation would need
             // MUX pin configuration from somewhere
-            Serial.println("[Sensor] MUX input requires additional pin configuration");
+            LOG_W(TAG, "MUX input requires additional pin configuration");
             return nullptr;
         }
 
         default:
-            Serial.printf("[Sensor] Unknown input type: %d\n", static_cast<int>(config.input_type));
+            LOG_E(TAG, "Unknown input type: %d", static_cast<int>(config.input_type));
             return nullptr;
     }
 }
