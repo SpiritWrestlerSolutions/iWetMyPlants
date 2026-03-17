@@ -1,6 +1,6 @@
 /**
  * @file logger.h
- * @brief Unified logging system for iWetMyPlants v2.0
+ * @brief Unified logging system for iWetMyPlants v1.0
  */
 
 #pragma once

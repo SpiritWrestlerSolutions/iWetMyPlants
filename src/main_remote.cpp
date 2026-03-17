@@ -2,7 +2,7 @@
  * @file main_remote.cpp
  * @brief Remote firmware entry point
  *
- * iWetMyPlants v2.0 - Remote Firmware
+ * iWetMyPlants v1.0 - Remote Firmware
  * WiFi sensor node with HTTP reporting to Hub
  */
 

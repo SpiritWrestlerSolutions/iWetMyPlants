@@ -1,4 +1,4 @@
-# iWetMyPlants v2.0 — System Architecture Reference
+# iWetMyPlants v1.0 — System Architecture Reference
 
 **Purpose:** LLM-readable reference describing every subsystem, class, communication path, and data flow in the iWetMyPlants firmware. Written for passing context to AI assistants. Version reflects state after the March 2026 pull (41 commits, 64 files changed).
 

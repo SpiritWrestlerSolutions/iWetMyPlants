@@ -1,4 +1,4 @@
-# iWetMyPlants v2.0 — Beta Guide
+# iWetMyPlants v1.0 — Beta Guide
 
 > **Version 1.0.0** · Web installer: https://spiritwrestler.ca/plants/
 

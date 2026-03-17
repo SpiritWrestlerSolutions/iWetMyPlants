@@ -1,6 +1,6 @@
 /**
  * @file config_manager.h
- * @brief NVS-based configuration management for iWetMyPlants v2.0
+ * @brief NVS-based configuration management for iWetMyPlants v1.0
  *
  * Handles persistent storage of device configuration using ESP32's
  * Non-Volatile Storage (NVS) system. Provides load, save, and reset

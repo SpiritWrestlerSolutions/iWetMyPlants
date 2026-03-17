@@ -1,6 +1,6 @@
 /**
  * @file defaults.h
- * @brief Default configuration values for iWetMyPlants v2.0
+ * @brief Default configuration values for iWetMyPlants v1.0
  *
  * These defaults are applied when no configuration exists in NVS
  * or when a factory reset is performed.

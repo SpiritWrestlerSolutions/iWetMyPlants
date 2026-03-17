@@ -1,4 +1,4 @@
-# iWetMyPlants v2.0 Integration Test Checklist
+# iWetMyPlants v1.0 Integration Test Checklist
 
 ## Build Verification
 

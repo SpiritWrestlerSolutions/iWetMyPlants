@@ -1,6 +1,6 @@
 /**
  * @file message_types.h
- * @brief ESP-NOW message protocol definitions for iWetMyPlants v2.0
+ * @brief ESP-NOW message protocol definitions for iWetMyPlants v1.0
  *
  * Defines all message types exchanged between Hub, Remote, and Greenhouse devices.
  * All structures are packed to ensure consistent wire format across devices.

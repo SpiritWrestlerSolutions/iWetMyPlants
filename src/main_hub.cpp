@@ -2,7 +2,7 @@
  * @file main_hub.cpp
  * @brief Hub firmware entry point
  *
- * iWetMyPlants v2.0 - Hub Firmware
+ * iWetMyPlants v1.0 - Hub Firmware
  * Central coordinator, ESP-NOW gateway, MQTT bridge
  */
 

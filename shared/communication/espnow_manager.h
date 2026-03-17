@@ -1,6 +1,6 @@
 /**
  * @file espnow_manager.h
- * @brief ESP-NOW communication manager for iWetMyPlants v2.0
+ * @brief ESP-NOW communication manager for iWetMyPlants v1.0
  *
  * Provides reliable ESP-NOW communication with:
  * - Automatic retry on failure

@@ -1,6 +1,6 @@
 /**
  * @file config_schema.h
- * @brief Configuration structure definitions for iWetMyPlants v2.0
+ * @brief Configuration structure definitions for iWetMyPlants v1.0
  *
  * All configuration data is stored in NVS and managed by ConfigManager.
  * Structures are packed to ensure consistent memory layout across builds.
