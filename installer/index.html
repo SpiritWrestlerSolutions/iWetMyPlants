@@ -121,15 +121,10 @@
             display: flex;
             background: var(--card-background);
             border-bottom: 2px solid var(--border-color);
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
             position: sticky;
             top: 57px;
             z-index: 90;
         }
-        .site-nav::-webkit-scrollbar { display: none; }
-
         .nav-tab {
             padding: 0.85rem 1.4rem;
             border: none;
@@ -189,9 +184,6 @@
             display: flex;
             background: var(--background-color);
             border-bottom: 1px solid var(--border-color);
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
             border-radius: var(--radius) var(--radius) 0 0;
         }
         .device-selector::-webkit-scrollbar { display: none; }
@@ -664,11 +656,11 @@
             User Guides ▾
         </button>
         <div class="nav-dropdown-menu" role="menu">
-            <a href="https://spiritwrestler.ca/plants/documentation/quick-start.html" class="nav-dropdown-item" target="_blank">📖 Quick Start Guide </span>
-            <a href="https://spiritwrestler.ca/plants/documentation/user-guide.html" class="nav-dropdown-item" target="_blank">📘 User Guide</span>
-            <a href="https://spiritwrestler.ca/plants/documentation/wiring-guide.html" class="nav-dropdown-item" target="_blank">📗 Wiring Guide</span>
-            <a href="https://spiritwrestler.ca/plants/documentation/user-guide-greenhouse.html" class="nav-dropdown-item" target="_blank">📗 Greenhouse User Guide</span>
-            <a href="https://spiritwrestler.ca/plants/documentation/troubleshooting.html" class="nav-dropdown-item" target="_blank">📗 Troubleshooting Guide</span>
+            <a href="https://spiritwrestler.ca/plants/documentation/quick-start.html" class="nav-dropdown-item" target="_blank">📖 Quick Start Guide</a>
+            <a href="https://spiritwrestler.ca/plants/documentation/user-guide.html" class="nav-dropdown-item" target="_blank">📘 User Guide</a>
+            <a href="https://spiritwrestler.ca/plants/documentation/wiring-guide.html" class="nav-dropdown-item" target="_blank">📗 Wiring Guide</a>
+            <a href="https://spiritwrestler.ca/plants/documentation/user-guide-greenhouse.html" class="nav-dropdown-item" target="_blank">📗 Greenhouse User Guide</a>
+            <a href="https://spiritwrestler.ca/plants/documentation/troubleshooting.html" class="nav-dropdown-item" target="_blank">📗 Troubleshooting Guide</a>
         </div>
     </div>
 </nav>
@@ -1212,7 +1204,7 @@ otaBtn.addEventListener('click', async () => {
     xhr.send(form);
 });
 
-const FORMSPREE_ID = 'YOUR_FORMSPREE_ID';
+const FORMSPREE_ID = 'xojkpwpe';
 
 const feedbackModal  = document.getElementById('feedback-modal');
 const feedbackStatus = document.getElementById('feedback-status');
