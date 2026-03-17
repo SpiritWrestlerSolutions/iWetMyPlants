@@ -47,10 +47,7 @@ a.btn{display:block;text-align:center;background:#2196F3;color:#fff;padding:.6re
 <div id="override" style="display:none" class="warn"><b>Override Mode Active</b>Button press forced Standalone mode.<br>Settings and sensor data available below.
 <button onclick="retMode()">Return to Configured Mode</button></div>
 <div id="modebadge" class="mode" style="display:none"></div>
-<div class="c">
-<div class="big"><span id="pct">--</span>%<small id="sn">Sensor</small></div>
-<div class="r"><span class="l">Raw Value</span><span class="v" id="raw">--</span></div>
-</div>
+<div id="sensors-section"></div>
 <div class="c"><h2>WiFi</h2>
 <div class="r"><span class="l">SSID</span><span class="v" id="ssid">--</span></div>
 <div class="r"><span class="l">IP</span><span class="v" id="ip">--</span></div>
@@ -68,6 +65,7 @@ a.btn{display:block;text-align:center;background:#2196F3;color:#fff;padding:.6re
 <div class="r"><span class="l">Uptime</span><span class="v" id="up">--</span></div>
 <div class="r"><span class="l">Free Heap</span><span class="v" id="heap">--</span></div>
 <div class="r"><span class="l">Firmware</span><span class="v" id="fw">--</span></div>
+<div class="r" id="bat-row" style="display:none"><span class="l">Battery</span><span class="v" id="bat">--</span></div>
 </div>
 <a class="btn" href="/settings">Settings</a>
 <script>
@@ -75,9 +73,10 @@ function fmt(s){var h=Math.floor(s/3600),m=Math.floor(s%3600/60),sc=s%60;return 
 var mnames=['WiFi','Standalone','Low Power'];
 function upd(d){
 document.getElementById('dn').textContent=d.device_name||'iWetMyPlants Remote';
-document.getElementById('pct').textContent=d.moisture_percent;
-document.getElementById('raw').textContent=d.raw_value;
-document.getElementById('sn').textContent=d.sensor_name||'Sensor';
+if(d.sensors&&d.sensors.length){var h='';d.sensors.forEach(function(s){
+h+='<div class="c"><div class="big">'+s.moisture_percent+'%<small>'+(s.name||'Sensor '+(s.index+1))+'</small></div>';
+h+='<div class="r"><span class="l">Raw Value</span><span class="v">'+s.raw_value+'</span></div></div>';
+});document.getElementById('sensors-section').innerHTML=h;}
 document.getElementById('ssid').textContent=d.ssid||'Not connected';
 document.getElementById('ip').textContent=d.ip||'--';
 document.getElementById('rssi').textContent=d.wifi_connected?(d.rssi+' dBm'):'--';
@@ -92,6 +91,9 @@ document.getElementById('opmode').textContent=mnames[d.operating_mode]||'Unknown
 document.getElementById('up').textContent=fmt(d.uptime);
 document.getElementById('heap').textContent=Math.round(d.free_heap/1024)+' KB';
 document.getElementById('fw').textContent=d.firmware||'--';
+var br=document.getElementById('bat-row');
+if(d.battery_monitored){br.style.display='flex';document.getElementById('bat').textContent=d.battery_percent+'% ('+d.battery_voltage.toFixed(2)+'V)'}
+else{br.style.display='none'}
 if(d.override_active){document.getElementById('override').style.display='block'}
 var mb=document.getElementById('modebadge');
 if(d.operating_mode!==undefined&&!d.override_active){mb.textContent='Mode: '+mnames[d.operating_mode];mb.style.display='block'}
@@ -193,10 +195,21 @@ a.back{display:block;text-align:center;color:#2196F3;text-decoration:none;paddin
 </div>
 
 <div class="c"><h2>Sensor</h2>
-<label>Sensor Name</label>
+<label>Sensor Slot</label>
+<select id="sidx" onchange="loadSensorCfg()"></select>
+<div class="cb"><input type="checkbox" id="sen"><label for="sen">Enabled</label></div>
+<label>Name</label>
 <input type="text" id="sname" maxlength="31">
 <label>Input Type</label>
-<input type="text" id="stype" class="ro" readonly>
+<select id="stype" onchange="stypeChg()"><option value="0">Direct ADC</option><option value="1">ADS1115</option></select>
+<div id="sadcrow">
+<label>ADC Pin (GPIO)</label>
+<input type="number" id="sadcpin" min="0" max="21"></div>
+<div id="sadsrow" style="display:none">
+<label>ADS1115 Channel (0-3)</label>
+<select id="sadsch"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+<label>ADS1115 I2C Address</label>
+<select id="sadsaddr"><option value="72">0x48 (default)</option><option value="73">0x49</option><option value="74">0x4A</option><option value="75">0x4B</option></select></div>
 <label>Dry Value (air)</label>
 <input type="number" id="sdry" min="0" max="65535">
 <label>Wet Value (water)</label>
@@ -205,6 +218,16 @@ a.back{display:block;text-align:center;color:#2196F3;text-decoration:none;paddin
 <button class="bs" onclick="saveSensor()">Save Sensor</button>
 </div>
 
+<div class="c"><h2>Battery</h2>
+<div class="cb"><input type="checkbox" id="baten"><label for="baten">Battery Powered</label></div>
+<small>Enable if running on LiPo/18650 with a voltage divider on the ADC pin.</small>
+<label>Battery ADC Pin (GPIO)</label>
+<input type="number" id="batpin" min="0" max="21" value="1">
+<small>GPIO1 recommended on ESP32-C3 (use 2:1 voltage divider).</small>
+<label>Low Battery Threshold (V)</label>
+<input type="number" id="batlow" step="0.1" min="2.5" max="4.2" value="3.3">
+<button class="bs" onclick="saveBattery()">Save Battery</button>
+</div>
 <div class="c"><h2>System</h2>
 <label>Device ID</label>
 <input type="text" id="did" class="ro" readonly>
@@ -319,6 +342,12 @@ async function reboot(){
  catch(e){msg('Error',false)}
 }
 
+async function saveBattery(){
+try{
+var r=await fetch('/api/config/battery',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({enabled:$('baten').checked,adc_pin:parseInt($('batpin').value)||1,low_voltage:parseFloat($('batlow').value)||3.3})});
+var d=await r.json();msg(d.message||'Saved',d.success);
+}catch(e){msg('Error: '+e.message,false)}}
 async function importHub(){
 var t=$('impjson').value.trim();
 if(!t){msg('Paste config JSON from Hub',false);return}
@@ -349,6 +378,7 @@ fetch('/api/config').then(r=>r.json()).then(d=>{
   $('wakepin').value=d.mode.wake_button_pin!==undefined?d.mode.wake_button_pin:5;
   modeChanged();
  }
+ if(d.battery){$('baten').checked=d.battery.enabled;$('batpin').value=d.battery.adc_pin||1;$('batlow').value=d.battery.low_voltage||3.3}
 }).catch(()=>{});
 </script></body></html>)rawliteral";
 
@@ -442,6 +472,14 @@ void RemoteWeb::registerRoutes() {
         self->handlePostReturnMode(r);
     });
 
+    _server->on("/api/config/battery", HTTP_POST,
+        [](AsyncWebServerRequest* r) {},
+        nullptr,
+        [self](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+            self->handlePostBatteryConfig(r, d, l, i, t);
+        }
+    );
+
     _server->on("/api/espnow/import", HTTP_POST,
         [](AsyncWebServerRequest* r) {},
         nullptr,
@@ -497,6 +535,21 @@ void RemoteWeb::handleGetStatus(AsyncWebServerRequest* request) {
     doc["moisture_percent"] = _ctrl->getLastMoisturePercent();
     doc["raw_value"] = _ctrl->getLastRawValue();
     doc["sensor_name"] = Config.getMoistureSensor(0).sensor_name;
+    JsonArray sarr = doc["sensors"].to<JsonArray>();
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        if (!_ctrl->getSensor(i)) continue;
+        JsonObject sobj = sarr.add<JsonObject>();
+        sobj["index"] = i;
+        sobj["name"] = Config.getMoistureSensor(i).sensor_name;
+        sobj["moisture_percent"] = _ctrl->getLastMoisturePercent(i);
+        sobj["raw_value"] = _ctrl->getLastRawValue(i);
+    }
+    const auto& pwr_st = Config.getPower();
+    doc["battery_monitored"] = (pwr_st.battery_powered && pwr_st.battery_adc_pin > 0);
+    if (pwr_st.battery_powered && pwr_st.battery_adc_pin > 0) {
+        doc["battery_percent"] = _ctrl->getBatteryPercent();
+        doc["battery_voltage"] = _ctrl->getBatteryVoltage();
+    }
 
     doc["wifi_connected"] = WiFi.isConnected();
     doc["ssid"] = WiFi.isConnected() ? WiFi.SSID() : "";
@@ -540,14 +593,26 @@ void RemoteWeb::handleGetConfig(AsyncWebServerRequest* request) {
     mo["username"] = mqtt.username;
     mo["base_topic"] = mqtt.base_topic;
 
-    const auto& sensor = Config.getMoistureSensor(0);
-    auto so = doc["sensor"].to<JsonObject>();
-    so["name"] = sensor.sensor_name;
-    so["input_type"] = static_cast<int>(sensor.input_type);
-    so["input_type_name"] = _ctrl->getSensorTypeName();
-    so["dry_value"] = sensor.dry_value;
-    so["wet_value"] = sensor.wet_value;
-    so["enabled"] = sensor.enabled;
+    JsonArray sarr2 = doc["sensors"].to<JsonArray>();
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        const auto& s = Config.getMoistureSensor(i);
+        JsonObject sobj2 = sarr2.add<JsonObject>();
+        sobj2["index"] = i;
+        sobj2["name"] = s.sensor_name;
+        sobj2["enabled"] = s.enabled;
+        sobj2["input_type"] = static_cast<int>(s.input_type);
+        sobj2["input_type_name"] = _ctrl->getSensorTypeName(i);
+        sobj2["adc_pin"] = s.adc_pin;
+        sobj2["ads_channel"] = s.ads_channel;
+        sobj2["ads_address"] = s.ads_i2c_address;
+        sobj2["dry_value"] = s.dry_value;
+        sobj2["wet_value"] = s.wet_value;
+    }
+    const auto& bat_cfg = Config.getPower();
+    auto bato = doc["battery"].to<JsonObject>();
+    bato["enabled"] = bat_cfg.battery_powered;
+    bato["adc_pin"] = bat_cfg.battery_adc_pin;
+    bato["low_voltage"] = bat_cfg.low_battery_voltage;
 
     auto sys = doc["system"].to<JsonObject>();
     sys["device_id"] = Config.getDeviceId();
@@ -830,6 +895,26 @@ void RemoteWeb::handlePostReturnMode(AsyncWebServerRequest* request) {
     request->send(200, "application/json",
         "{\"success\":true,\"message\":\"Returning to configured mode...\"}");
     _ctrl->returnToConfiguredMode();
+}
+
+void RemoteWeb::handlePostBatteryConfig(AsyncWebServerRequest* request,
+                                         uint8_t* data, size_t len,
+                                         size_t index, size_t total) {
+    if (index != 0) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, data, len)) {
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+    }
+    auto& pwr = Config.getPowerMutable();
+    if (!doc["enabled"].isNull())     pwr.battery_powered = (bool)doc["enabled"];
+    if (!doc["adc_pin"].isNull())     pwr.battery_adc_pin = (uint8_t)(int)doc["adc_pin"];
+    if (!doc["low_voltage"].isNull()) pwr.low_battery_voltage = (float)doc["low_voltage"];
+    Config.save();
+    LOG_I(TAG, "Battery config: enabled=%d pin=%d low=%.2fV",
+          pwr.battery_powered, pwr.battery_adc_pin, pwr.low_battery_voltage);
+    request->send(200, "application/json",
+        "{\"success\":true,\"message\":\"Battery settings saved\"}");
 }
 
 } // namespace iwmp

@@ -516,6 +516,10 @@ bool RemoteController::reportToHub() {
         so["moisture_percent"] = _last_moisture_percent[i];
         so["raw_value"] = _last_raw_value[i];
     }
+    const auto& pwr_bat = Config.getPower();
+    if (pwr_bat.battery_powered && pwr_bat.battery_adc_pin > 0) {
+        doc["battery_percent"] = _power.getBatteryPercent();
+    }
     doc["rssi"] = WiFi.RSSI();
     doc["firmware_version"] = IWMP_VERSION;
 

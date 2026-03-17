@@ -53,6 +53,8 @@ public:
     MoistureSensor* getSensor(uint8_t idx = 0) {
         return (idx < IWMP_MAX_SENSORS) ? _sensors[idx].get() : nullptr;
     }
+    float getBatteryVoltage() const { return _power.getBatteryVoltage(); }
+    uint8_t getBatteryPercent() const { return _power.getBatteryPercent(); }
 
     // Hub report status (used by RemoteWeb status page)
     uint32_t getLastHubReportTime() const { return _last_hub_report_sec; }
