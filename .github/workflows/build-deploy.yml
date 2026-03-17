@@ -138,7 +138,4 @@ jobs:
           # Upload installer assets
           echo "put installer/index.html    $ROOT/index.html"    | $SFTP -b - "$SFTP_USER@$SFTP_HOST"
           echo "put installer/version.json  $ROOT/version.json"  | $SFTP -b - "$SFTP_USER@$SFTP_HOST"
-          # Banner has a space in the filename — quote both sides
-          printf 'put "%s" "%s"\n' \
-            "installer/IWMP Banner.webp" "$ROOT/IWMP Banner.webp" \
-            | $SFTP -b - "$SFTP_USER@$SFTP_HOST" || true
+          echo "put installer/IWMP_Banner.webp $ROOT/IWMP_Banner.webp" | $SFTP -b - "$SFTP_USER@$SFTP_HOST" || true

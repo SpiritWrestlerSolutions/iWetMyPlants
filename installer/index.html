@@ -3,96 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iWetMyPlants — Installer</title>
+    <title>iWetMyPlants — Open Source Plant Monitoring</title>
+    <meta name="description" content="iWetMyPlants is a free, open-source ESP32-based plant monitoring system. Monitor soil moisture, automate watering, and keep your plants happy — no subscriptions, no cost barriers.">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDAwIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iZHJvcEdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzc5YjhmZiIgLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjNThhNmZmIiAvPiA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJsZWFmR3JhZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMmVjYzcxIiAvPiA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMyN2FlNjAiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0idHJhbnNwYXJlbnQiIC8+CiAgPGNpcmNsZSBjeD0iMjAwIiBjeT0iMjAwIiByPSIxNTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzlhYTRiMiIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtZGFzaGFycmF5PSIxMCAxNSIgb3BhY2l0eT0iMC42IiAvPgogIDxwYXRoIGQ9Ik0gMTQwIDIzMCBMIDI2MCAyMzAgTCAyNDUgMzEwIEwgMTU1IDMxMCBaIiBmaWxsPSIjRTA5RTcyIiAvPgogICAgPHBhdGggZD0iTSAyMDAgMjEwIEwgMjAwIDE2MCIgc3Ryb2tlPSIjMjdhZTYwIiBzdHJva2Utd2lkdGg9IjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgLz4KICA8cmVjdCB4PSIxMzAiIHk9IjIxMCIgd2lkdGg9IjE0MCIgaGVpZ2h0PSIyNCIgcng9IjYiIGZpbGw9IiNDNzdGNTIiIC8+CiAgPHRleHQgeD0iMjAwIiB5PSIyMjciIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjE2IiBmaWxsPSIjMGUxMTE3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBsZXR0ZXItc3BhY2luZz0iMiI+SVdNUDwvdGV4dD4KICA8cmVjdCB4PSIxODUiIHk9IjI1NSIgd2lkdGg9IjMwIiBoZWlnaHQ9IjMwIiByeD0iMyIgZmlsbD0iIzMwMzEzNCIgLz4gCiAgPHJlY3QgeD0iMTkxIiB5PSIyNjEiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgZmlsbD0iIzIwMjEyNCIgLz4gCiAgPHBhdGggZD0iTSAxODAgMjYxIEwgMTg1IDI2MSBNIDE4MCAyNzAgTCAxODUgMjcwIE0gMTgwIDI3OSBMIDE4NSAyNzkiIHN0cm9rZT0iI2JkYzFjNiIgc3Ryb2tlLXdpZHRoPSIyLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0gMjE1IDI2MSBMIDIyMCAyNjEgTSAyMTUgMjcwIEwgMjIwIDI3MCBNIDIxNSAyNzkgTCAyMjAgMjc5IiBzdHJva2U9IiNiZGMxYzYiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KICA8cGF0aCBkPSJNIDE5OCAxODAgQyAxNTAgMTgwLCAxMzAgMTMwLCAxNjAgMTIwIEMgMTgwIDExMCwgMjAwIDE1MCwgMTk4IDE4MCBaIiBmaWxsPSJ1cmwoI2xlYWZHcmFkKSIgLz4KICA8cGF0aCBkPSJNIDIwMiAxOTAgQyAyNDAgMTkwLCAyNjAgMTQwLCAyNDAgMTIwIEMgMjIwIDExMCwgMjAwIDE1MCwgMjAyIDE5MCBaIiBmaWxsPSJ1cmwoI2xlYWZHcmFkKSIgLz4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMDAsIDE0MCkgc2NhbGUoMC43KSB0cmFuc2xhdGUoLTIwMCwgLTE0MCkiPgogICAgPHBhdGggZD0iTSAyMDAgNTAgQyAyMDAgNTAsIDE2MCAxMTAsIDE2MCAxNDAgQyAxNjAgMTYyLCAxNzggMTgwLCAyMDAgMTgwIEMgMjIyIDE4MCwgMjQwIDE2MiwgMjQwIDE0MCBDIDI0MCAxMTAsIDIwMCA1MCwgMjAwIDUwIFoiIGZpbGw9InVybCgjZHJvcEdyYWQpIiAvPgogICAgPGNpcmNsZSBjeD0iMTg1IiBjeT0iMTQ1IiByPSI1IiBmaWxsPSIjMGUxMTE3IiAvPiAKICAgIDxjaXJjbGUgY3g9IjIxNSIgY3k9IjE0NSIgcj0iNSIgZmlsbD0iIzBlMTExNyIgLz4KICAgIDxwYXRoIGQ9Ik0gMTk1IDE1NSBRIDIwMCAxNjAgMjA1IDE1NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMGUxMTE3IiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgLz4KICAgIDxlbGxpcHNlIGN4PSIxNzUiIGN5PSIxNTAiIHJ4PSI2IiByeT0iNCIgZmlsbD0iI2U2ZWRmMyIgb3BhY2l0eT0iMC42IiAvPiAKICAgIDxlbGxpcHNlIGN4PSIyMjUiIGN5PSIxNTAiIHJ4PSI2IiByeT0iNCIgZmlsbD0iI2U2ZWRmMyIgb3BhY2l0eT0iMC42IiAvPgogIDwvZz4KPC9zdmc+">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Nunito+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
     <style>
-        /* ── CSS variables matching the embedded device UI ── */
         :root {
             --primary-color:    #4CAF50;
             --primary-dark:     #388E3C;
+            --primary-light:    #C8E6C9;
             --secondary-color:  #2196F3;
+            --secondary-dark:   #1565C0;
+            --accent-color:     #1B5E20;
             --danger-color:     #f44336;
             --warning-color:    #FF9800;
-            --background-color: #f5f5f5;
+            --background-color: #f4f7f4;
             --card-background:  #ffffff;
-            --text-color:       #333333;
-            --text-muted:       #666666;
-            --border-color:     #e0e0e0;
-            --shadow:           0 2px 4px rgba(0,0,0,0.1);
+            --text-color:       #1a2e1a;
+            --text-muted:       #5a6b5a;
+            --border-color:     #dde8dd;
+            --shadow:           0 2px 8px rgba(0,0,0,0.08);
+            --shadow-md:        0 4px 16px rgba(0,0,0,0.12);
+            --radius:           10px;
+            --font-heading:     'Nunito', sans-serif;
+            --font-body:        'Nunito Sans', sans-serif;
         }
 
         @media (prefers-color-scheme: dark) {
             :root {
-                --background-color: #1a1a1a;
-                --card-background:  #2d2d2d;
-                --text-color:       #e0e0e0;
-                --text-muted:       #aaaaaa;
-                --border-color:     #404040;
-                --shadow:           0 2px 4px rgba(0,0,0,0.3);
+                --background-color: #131a13;
+                --card-background:  #1e2a1e;
+                --text-color:       #ddeedd;
+                --text-muted:       #8aaa8a;
+                --border-color:     #2d3f2d;
+                --shadow:           0 2px 8px rgba(0,0,0,0.3);
+                --shadow-md:        0 4px 16px rgba(0,0,0,0.4);
+                --primary-light:    #1b3a1b;
+                --accent-color:     #66bb6a;
             }
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: var(--font-body);
             background-color: var(--background-color);
             color: var(--text-color);
-            line-height: 1.6;
+            line-height: 1.65;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
-        /* ── Header ── */
         .header {
-            background-color: var(--primary-color);
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #2d6e2d 100%);
             color: white;
-            padding: 1rem 1.5rem;
+            padding: 0.85rem 1.5rem;
             display: flex;
             align-items: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-        .header-brand { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.3px; }
+        .header-brand {
+            font-family: var(--font-heading);
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
         .header-subtitle {
             margin-left: auto;
-            font-size: 0.9rem;
-            opacity: 0.85;
+            font-size: 0.85rem;
+            opacity: 0.8;
+            font-weight: 500;
         }
+
+        .beta-banner {
+            background: #7B3F00;
+            color: #FFE0B2;
+            text-align: center;
+            padding: 0.55rem 1rem;
+            font-family: var(--font-heading);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .beta-banner a {
+            color: #FFD082;
+            text-decoration: underline;
+        }
+        .beta-banner a:hover { color: #ffffff; }
+
         .hero-logo {
-            background-color: #ffffff; 
+            background-color: #ffffff;
             width: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 2rem 1rem;       
+            padding: 1.75rem 1rem;
             border-bottom: 1px solid var(--border-color);
         }
-
         .hero-logo img {
-            max-width: 600px;         
-            width: 100%;              
+            max-width: 580px;
+            width: 100%;
             height: auto;
             display: block;
         }
-        /* ── Device selector tabs ── */
-        .device-selector {
+
+        .site-nav {
             display: flex;
             background: var(--card-background);
+            border-bottom: 2px solid var(--border-color);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            position: sticky;
+            top: 57px;
+            z-index: 90;
+        }
+        .site-nav::-webkit-scrollbar { display: none; }
+
+        .nav-tab {
+            padding: 0.85rem 1.4rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-family: var(--font-heading);
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.15s, border-color 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+            letter-spacing: 0.01em;
+        }
+        .nav-tab:hover { color: var(--primary-color); }
+        .nav-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .nav-dropdown { position: relative; }
+        .nav-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            background: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 var(--radius) var(--radius);
+            min-width: 220px;
+            box-shadow: var(--shadow-md);
+            z-index: 200;
+        }
+        .nav-dropdown.open .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item {
+            display: block;
+            padding: 0.7rem 1.1rem;
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.1s;
+        }
+        .nav-dropdown-item:last-child { border-bottom: none; }
+        .nav-dropdown-item:hover { background: var(--background-color); color: var(--primary-color); }
+        .nav-dropdown-item.coming-soon {
+            color: var(--text-muted);
+            cursor: default;
+            font-style: italic;
+        }
+        .nav-dropdown-item.coming-soon:hover { background: none; color: var(--text-muted); }
+
+        .device-selector {
+            display: flex;
+            background: var(--background-color);
             border-bottom: 1px solid var(--border-color);
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
+            border-radius: var(--radius) var(--radius) 0 0;
         }
         .device-selector::-webkit-scrollbar { display: none; }
 
         .device-tab {
-            padding: 0.85rem 1.5rem;
+            padding: 0.7rem 1.25rem;
             border: none;
             background: none;
             cursor: pointer;
-            font-size: 0.95rem;
+            font-family: var(--font-heading);
+            font-size: 0.875rem;
+            font-weight: 700;
             color: var(--text-muted);
             border-bottom: 3px solid transparent;
             transition: color 0.15s, border-color 0.15s;
@@ -103,32 +214,35 @@
         .device-tab.active {
             color: var(--primary-color);
             border-bottom-color: var(--primary-color);
-            font-weight: 600;
         }
 
-        /* ── Main layout ── */
+        .page-panel { display: none; }
+        .page-panel.active { display: block; }
+
         main {
             flex: 1;
-            max-width: 720px;
+            max-width: 760px;
             width: 100%;
             margin: 0 auto;
-            padding: 1.5rem;
+            padding: 1.75rem 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 1.5rem;
         }
 
-        /* ── Cards ── */
         .card {
             background: var(--card-background);
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 1.5rem;
             box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
         }
         .card h2 {
-            font-size: 1.05rem;
-            font-weight: 600;
+            font-family: var(--font-heading);
+            font-size: 1.1rem;
+            font-weight: 800;
             margin-bottom: 0.6rem;
+            color: var(--text-color);
         }
         .card > p {
             color: var(--text-muted);
@@ -136,133 +250,229 @@
             margin-bottom: 1rem;
         }
 
-        /* ── Device info card ── */
+        .about-hero {
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%);
+            border-radius: var(--radius);
+            padding: 2.25rem 2rem;
+            color: white;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+        .about-hero::before {
+            content: '';
+            position: absolute;
+            top: -40px; right: -40px;
+            width: 200px; height: 200px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+        }
+        .about-hero::after {
+            content: '';
+            position: absolute;
+            bottom: -60px; left: -30px;
+            width: 250px; height: 250px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 50%;
+        }
+        .about-hero h1 {
+            font-family: var(--font-heading);
+            font-size: clamp(1.6rem, 4vw, 2.2rem);
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            position: relative;
+        }
+        .about-hero p {
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+            opacity: 0.9;
+            max-width: 540px;
+            margin: 0 auto 1.5rem;
+            line-height: 1.7;
+            position: relative;
+        }
+        .about-cta-row {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            position: relative;
+        }
+        .btn-about {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.65rem 1.4rem;
+            border-radius: 6px;
+            font-family: var(--font-heading);
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+            text-decoration: none;
+        }
+        .btn-about:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .btn-about-hub        { background: #ffffff; color: #1B5E20; }
+        .btn-about-remote     { background: rgba(255,255,255,0.18); color: white; border: 1.5px solid rgba(255,255,255,0.5); }
+        .btn-about-greenhouse { background: rgba(255,255,255,0.18); color: white; border: 1.5px solid rgba(255,255,255,0.5); }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .feature-item {
+            background: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 1.25rem 1rem;
+            text-align: center;
+        }
+        .feature-icon { font-size: 2rem; margin-bottom: 0.5rem; display: block; }
+        .feature-item h3 {
+            font-family: var(--font-heading);
+            font-size: 0.95rem;
+            font-weight: 800;
+            margin-bottom: 0.3rem;
+        }
+        .feature-item p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+        .about-bio { display: flex; gap: 1.5rem; align-items: flex-start; }
+        .bio-icon {
+            flex-shrink: 0;
+            width: 64px; height: 64px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+        }
+        .bio-text h3 { font-family: var(--font-heading); font-size: 1rem; font-weight: 800; margin-bottom: 0.35rem; }
+        .bio-text p { font-size: 0.875rem; color: var(--text-muted); line-height: 1.65; }
+
+        .support-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-top: 0.75rem;
+        }
+        .support-option {
+            border: 1.5px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 1.1rem;
+            text-align: center;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .support-option:hover { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-light); }
+        .support-option .icon { font-size: 1.75rem; margin-bottom: 0.4rem; display: block; }
+        .support-option h4 { font-family: var(--font-heading); font-size: 0.9rem; font-weight: 800; margin-bottom: 0.3rem; }
+        .support-option p { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; line-height: 1.5; }
+        .support-option a, .support-option button {
+            display: inline-block;
+            padding: 0.45rem 1rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-family: var(--font-heading);
+            font-size: 0.825rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .support-option a:hover, .support-option button:hover { background: var(--primary-dark); }
+        .support-option .btn-github { background: #24292f; }
+        .support-option .btn-github:hover { background: #444d56; }
+
         .device-badge {
             display: inline-block;
-            padding: 0.2rem 0.65rem;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 600;
+            padding: 0.2rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            font-family: var(--font-heading);
             background: var(--primary-color);
             color: white;
             margin-bottom: 0.6rem;
+            letter-spacing: 0.02em;
         }
-        #device-description {
-            font-size: 0.9rem;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-        }
-        .spec-grid {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 0.35rem 1.25rem;
-            font-size: 0.875rem;
-        }
+        #device-description { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; }
+        .spec-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1.25rem; font-size: 0.875rem; }
         .spec-grid dt { color: var(--text-muted); }
-        .spec-grid dd { font-weight: 500; }
+        .spec-grid dd { font-weight: 600; }
 
-        /* ── Form elements ── */
         .form-group { margin-bottom: 1rem; }
         .form-group:last-child { margin-bottom: 0; }
-
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 0.35rem;
-        }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; }
         .form-group input[type="text"],
-        .form-group input[type="file"] {
+        .form-group input[type="email"],
+        .form-group input[type="file"],
+        .form-group textarea,
+        .form-group select {
             width: 100%;
             padding: 0.6rem 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            border: 1.5px solid var(--border-color);
+            border-radius: 6px;
             font-size: 0.9rem;
+            font-family: var(--font-body);
             background: var(--card-background);
             color: var(--text-color);
             transition: border-color 0.15s;
         }
-        .form-group input:focus {
+        .form-group textarea { resize: vertical; min-height: 100px; }
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
             outline: none;
             border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-light);
         }
-        .helper-text {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 0.25rem;
-        }
+        .helper-text { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
 
-        /* ── Buttons ── */
         .btn {
             display: inline-flex;
             align-items: center;
             gap: 0.4rem;
-            padding: 0.6rem 1.2rem;
+            padding: 0.6rem 1.25rem;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
+            font-family: var(--font-heading);
             font-size: 0.9rem;
-            font-weight: 500;
+            font-weight: 700;
             cursor: pointer;
-            transition: background-color 0.15s, opacity 0.15s;
+            transition: background-color 0.15s, opacity 0.15s, transform 0.1s;
         }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .btn-primary { background: var(--primary-color); color: white; }
+        .btn:active:not(:disabled) { transform: scale(0.97); }
+        .btn-primary  { background: var(--primary-color); color: white; }
         .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
-
         .btn-secondary { background: var(--secondary-color); color: white; }
-        .btn-secondary:hover:not(:disabled) { background: #1976D2; }
-
+        .btn-secondary:hover:not(:disabled) { background: #1565C0; }
         .btn-outline {
             background: transparent;
             color: var(--primary-color);
-            border: 1px solid var(--primary-color);
+            border: 1.5px solid var(--primary-color);
         }
         .btn-outline:hover:not(:disabled) { background: var(--primary-color); color: white; }
-
         .btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
 
-        /* ── esp-web-install-button slot ── */
         esp-web-install-button { display: block; }
 
-        /* ── Progress bar ── */
         .progress-wrap { display: none; margin-top: 1rem; }
         .progress-wrap.visible { display: block; }
-        .progress-meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-bottom: 0.35rem;
-        }
-        .progress-track {
-            width: 100%;
-            height: 8px;
-            background: var(--border-color);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            background: var(--primary-color);
-            border-radius: 4px;
-            width: 0%;
-            transition: width 0.2s;
-        }
+        .progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.35rem; }
+        .progress-track { width: 100%; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--primary-color); border-radius: 4px; width: 0%; transition: width 0.2s; }
 
-        /* ── Status messages ── */
-        .status-msg {
-            display: none;
-            padding: 0.65rem 1rem;
-            border-radius: 4px;
-            font-size: 0.875rem;
-            margin-top: 0.85rem;
-        }
+        .status-msg { display: none; padding: 0.7rem 1rem; border-radius: 6px; font-size: 0.875rem; margin-top: 0.85rem; }
         .status-msg.visible { display: block; }
-        .status-msg.success { background: #E8F5E9; color: #2E7D32; }
-        .status-msg.error   { background: #FFEBEE; color: #C62828; }
-        .status-msg.info    { background: #E3F2FD; color: #1565C0; }
-        .status-msg.warning { background: #FFF8E1; color: #E65100; }
+        .status-msg.success { background: #E8F5E9; color: #2E7D32; border-left: 3px solid #4CAF50; }
+        .status-msg.error   { background: #FFEBEE; color: #C62828; border-left: 3px solid #f44336; }
+        .status-msg.info    { background: #E3F2FD; color: #1565C0; border-left: 3px solid #2196F3; }
+        .status-msg.warning { background: #FFF8E1; color: #E65100; border-left: 3px solid #FF9800; }
 
         @media (prefers-color-scheme: dark) {
             .status-msg.success { background: #1B5E20; color: #A5D6A7; }
@@ -271,21 +481,17 @@
             .status-msg.warning { background: #4E2600; color: #FFCC80; }
         }
 
-        /* ── Browser note ── */
         .browser-note {
             padding: 0.65rem 1rem;
             background: #FFF8E1;
             border-left: 3px solid var(--warning-color);
-            border-radius: 0 4px 4px 0;
+            border-radius: 0 6px 6px 0;
             font-size: 0.85rem;
             color: #5D4037;
             margin-bottom: 1rem;
         }
-        @media (prefers-color-scheme: dark) {
-            .browser-note { background: #3E2723; color: #FFCCBC; }
-        }
+        @media (prefers-color-scheme: dark) { .browser-note { background: #3E2723; color: #FFCCBC; } }
 
-        /* ── Section divider ── */
         .section-divider {
             display: flex;
             align-items: center;
@@ -293,199 +499,302 @@
             color: var(--text-muted);
             font-size: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.07em;
+            letter-spacing: 0.08em;
+            font-weight: 700;
         }
         .section-divider::before,
-        .section-divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border-color);
-        }
+        .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-color); }
 
-        /* ── Version badge ── */
         .version-badge {
-            font-size: 0.75rem;
-            font-weight: 600;
-            background: rgba(255,255,255,0.25);
+            font-size: 0.72rem;
+            font-weight: 700;
+            background: rgba(255,255,255,0.22);
             color: white;
             padding: 0.15rem 0.6rem;
             border-radius: 10px;
-            margin-left: 0.75rem;
+            margin-left: 0.5rem;
             letter-spacing: 0.03em;
         }
 
-        /* ── Changelog ── */
         .changelog-toggle {
-            background: none;
-            border: none;
-            color: var(--primary-color);
-            font-size: 0.875rem;
-            cursor: pointer;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            gap: 0.3rem;
+            background: none; border: none; color: var(--primary-color);
+            font-size: 0.875rem; font-family: var(--font-body); cursor: pointer;
+            padding: 0; display: flex; align-items: center; gap: 0.3rem; font-weight: 600;
         }
         .changelog-toggle:hover { text-decoration: underline; }
         .changelog-toggle svg { transition: transform 0.2s; }
         .changelog-toggle.open svg { transform: rotate(180deg); }
-
-        .changelog-body {
-            display: none;
-            margin-top: 0.85rem;
-        }
+        .changelog-body { display: none; margin-top: 0.85rem; }
         .changelog-body.visible { display: block; }
-
         .changelog-entry { margin-bottom: 1rem; }
-        .changelog-entry h3 {
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 0.35rem;
-            color: var(--text-color);
-        }
-        .changelog-entry ul {
-            padding-left: 1.1rem;
-            margin: 0;
-        }
-        .changelog-entry ul li {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-bottom: 0.2rem;
-        }
+        .changelog-entry h3 { font-size: 0.875rem; font-weight: 700; font-family: var(--font-heading); margin-bottom: 0.35rem; color: var(--text-color); }
+        .changelog-entry ul { padding-left: 1.1rem; margin: 0; }
+        .changelog-entry ul li { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.2rem; }
 
-        /* ── Footer ── */
+        .setup-steps { padding-left: 1.25rem; margin: 0.85rem 0 0; display: flex; flex-direction: column; gap: 0.4rem; }
+        .setup-steps li { font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; }
+        .setup-steps strong { color: var(--text-color); }
+
+        .fallback-note {
+            margin-top: 0.85rem; padding: 0.65rem 0.9rem;
+            background: #FFF8E1; border-left: 3px solid #F59E0B;
+            border-radius: 0 6px 6px 0; font-size: 0.82rem; color: #5D4037;
+        }
+        @media (prefers-color-scheme: dark) { .fallback-note { background: #3E2723; color: #FFCCBC; } }
+        .fallback-note code { font-family: 'Courier New', monospace; background: rgba(0,0,0,0.1); padding: 0.1em 0.3em; border-radius: 3px; }
+
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); z-index: 500;
+            align-items: center; justify-content: center; padding: 1rem;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--card-background); border-radius: var(--radius);
+            padding: 1.75rem; max-width: 520px; width: 100%;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.25); position: relative;
+            max-height: 90vh; overflow-y: auto;
+        }
+        .modal h2 { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 800; margin-bottom: 0.35rem; }
+        .modal > p { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.25rem; }
+        .modal-close {
+            position: absolute; top: 1rem; right: 1rem;
+            background: none; border: none; cursor: pointer;
+            color: var(--text-muted); font-size: 1.25rem; line-height: 1;
+            padding: 0.25rem; border-radius: 4px; transition: background 0.1s;
+        }
+        .modal-close:hover { background: var(--border-color); }
+
+        .honeypot { display: none !important; }
+
         .footer {
-            text-align: center;
-            padding: 1.25rem;
-            font-size: 0.8rem;
-            color: var(--text-muted);
+            text-align: center; padding: 1.5rem 1rem;
+            font-size: 0.8rem; color: var(--text-muted);
             border-top: 1px solid var(--border-color);
         }
         .footer a { color: var(--primary-color); text-decoration: none; }
         .footer a:hover { text-decoration: underline; }
+        .footer-links { display: flex; justify-content: center; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+
+        .feedback-fab {
+            position: fixed; bottom: 1.5rem; right: 1.5rem;
+            background: var(--primary-color); color: white;
+            border: none; border-radius: 50px; padding: 0.65rem 1.2rem;
+            font-family: var(--font-heading); font-size: 0.875rem; font-weight: 700;
+            cursor: pointer; box-shadow: 0 4px 16px rgba(76,175,80,0.4);
+            display: flex; align-items: center; gap: 0.4rem;
+            z-index: 400; transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .feedback-fab:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(76,175,80,0.5); }
+
+        .text-muted { color: var(--text-muted); }
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
 
         @media (max-width: 600px) {
             main { padding: 1rem; }
             .card { padding: 1.25rem; }
             .header-subtitle { display: none; }
+            .about-bio { flex-direction: column; gap: 1rem; }
+            .bio-icon { width: 52px; height: 52px; font-size: 1.4rem; align-self: flex-start; }
+            .feedback-fab span { display: none; }
+            .feedback-fab { padding: 0.75rem; border-radius: 50%; bottom: 1rem; right: 1rem; }
+            .about-hero { padding: 1.75rem 1.25rem; }
         }
 
-        /* ── Improv WiFi setup steps (Hub only) ── */
-        .setup-steps {
-            padding-left: 1.25rem;
-            margin: 0.85rem 0 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
-        }
-        .setup-steps li {
-            font-size: 0.875rem;
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-        .setup-steps strong { color: var(--text-color); }
-
-        .fallback-note {
-            margin-top: 0.85rem;
-            padding: 0.6rem 0.9rem;
-            background: #FFF8E1;
-            border-left: 3px solid #F59E0B;
-            border-radius: 0 4px 4px 0;
-            font-size: 0.82rem;
-            color: #5D4037;
-        }
-        @media (prefers-color-scheme: dark) {
-            .fallback-note { background: #3E2723; color: #FFCCBC; }
-        }
-        .fallback-note code {
-            font-family: monospace;
-            background: rgba(0,0,0,0.08);
-            padding: 0.1em 0.3em;
-            border-radius: 3px;
+        @media (max-width: 400px) {
+            .feature-grid { grid-template-columns: 1fr; }
+            .support-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
 <header class="header">
-    <span class="header-brand" style="display:flex;align-items:center">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="44" height="44" style="display:inline-block;vertical-align:middle;margin-right:10px;flex-shrink:0">
-  <defs>
-    <linearGradient id="hdr-dropGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#79b8ff" />
-      <stop offset="100%" stop-color="#58a6ff" /> </linearGradient>
-    <linearGradient id="hdr-leafGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#2ecc71" /> <stop offset="100%" stop-color="#27ae60" />
-    </linearGradient>
-  </defs>
-  <rect width="400" height="400" fill="transparent" />
-  <circle cx="200" cy="200" r="150" fill="none" stroke="#9aa4b2" stroke-width="4" stroke-dasharray="10 15" opacity="0.6" />
-  <path d="M 140 230 L 260 230 L 245 310 L 155 310 Z" fill="#E09E72" />
-    <path d="M 200 210 L 200 160" stroke="#27ae60" stroke-width="8" stroke-linecap="round" />
-  <rect x="130" y="210" width="140" height="24" rx="6" fill="#C77F52" />
-  <text x="200" y="227" font-family="monospace, sans-serif" font-weight="bold" font-size="16" fill="#0e1117" text-anchor="middle" letter-spacing="2">IWMP</text>
-  <rect x="185" y="255" width="30" height="30" rx="3" fill="#303134" /> 
-  <rect x="191" y="261" width="18" height="18" fill="#202124" /> 
-  <path d="M 180 261 L 185 261 M 180 270 L 185 270 M 180 279 L 185 279" stroke="#bdc1c6" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M 215 261 L 220 261 M 215 270 L 220 270 M 215 279 L 220 279" stroke="#bdc1c6" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M 198 180 C 150 180, 130 130, 160 120 C 180 110, 200 150, 198 180 Z" fill="url(#hdr-leafGrad)" />
-  <path d="M 202 190 C 240 190, 260 140, 240 120 C 220 110, 200 150, 202 190 Z" fill="url(#hdr-leafGrad)" />
-  <g transform="translate(200, 140) scale(0.7) translate(-200, -140)">
-    <path d="M 200 50 C 200 50, 160 110, 160 140 C 160 162, 178 180, 200 180 C 222 180, 240 162, 240 140 C 240 110, 200 50, 200 50 Z" fill="url(#hdr-dropGrad)" />
-    <circle cx="185" cy="145" r="5" fill="#0e1117" /> 
-    <circle cx="215" cy="145" r="5" fill="#0e1117" />
-    <path d="M 195 155 Q 200 160 205 155" fill="none" stroke="#0e1117" stroke-width="3" stroke-linecap="round" />
-    <ellipse cx="175" cy="150" rx="6" ry="4" fill="#e6edf3" opacity="0.6" /> 
-    <ellipse cx="225" cy="150" rx="6" ry="4" fill="#e6edf3" opacity="0.6" />
-  </g>
-</svg>
+    <span class="header-brand">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="36" height="36" style="flex-shrink:0" aria-hidden="true">
+          <defs>
+            <linearGradient id="hdr-dropGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#79b8ff"/><stop offset="100%" stop-color="#58a6ff"/>
+            </linearGradient>
+            <linearGradient id="hdr-leafGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#2ecc71"/><stop offset="100%" stop-color="#27ae60"/>
+            </linearGradient>
+          </defs>
+          <rect width="400" height="400" fill="transparent"/>
+          <circle cx="200" cy="200" r="150" fill="none" stroke="#9aa4b2" stroke-width="4" stroke-dasharray="10 15" opacity="0.6"/>
+          <path d="M 140 230 L 260 230 L 245 310 L 155 310 Z" fill="#E09E72"/>
+          <path d="M 200 210 L 200 160" stroke="#27ae60" stroke-width="8" stroke-linecap="round"/>
+          <rect x="130" y="210" width="140" height="24" rx="6" fill="#C77F52"/>
+          <text x="200" y="227" font-family="monospace,sans-serif" font-weight="bold" font-size="16" fill="#0e1117" text-anchor="middle" letter-spacing="2">IWMP</text>
+          <rect x="185" y="255" width="30" height="30" rx="3" fill="#303134"/>
+          <rect x="191" y="261" width="18" height="18" fill="#202124"/>
+          <path d="M 180 261 L 185 261 M 180 270 L 185 270 M 180 279 L 185 279" stroke="#bdc1c6" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M 215 261 L 220 261 M 215 270 L 220 270 M 215 279 L 220 279" stroke="#bdc1c6" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M 198 180 C 150 180,130 130,160 120 C 180 110,200 150,198 180 Z" fill="url(#hdr-leafGrad)"/>
+          <path d="M 202 190 C 240 190,260 140,240 120 C 220 110,200 150,202 190 Z" fill="url(#hdr-leafGrad)"/>
+          <g transform="translate(200,140) scale(0.7) translate(-200,-140)">
+            <path d="M 200 50 C 200 50,160 110,160 140 C 160 162,178 180,200 180 C 222 180,240 162,240 140 C 240 110,200 50,200 50 Z" fill="url(#hdr-dropGrad)"/>
+            <circle cx="185" cy="145" r="5" fill="#0e1117"/>
+            <circle cx="215" cy="145" r="5" fill="#0e1117"/>
+            <path d="M 195 155 Q 200 160 205 155" fill="none" stroke="#0e1117" stroke-width="3" stroke-linecap="round"/>
+            <ellipse cx="175" cy="150" rx="6" ry="4" fill="#e6edf3" opacity="0.6"/>
+            <ellipse cx="225" cy="150" rx="6" ry="4" fill="#e6edf3" opacity="0.6"/>
+          </g>
+        </svg>
         iWetMyPlants
         <span class="version-badge" id="header-version">v1.0.0</span>
     </span>
-    <span class="header-subtitle">Installer &amp; Updater</span>
+    <span class="header-subtitle">Open Source Plant Monitoring</span>
 </header>
 
-<div class="hero-logo">
-    <img src="IWMP%20Banner.webp" alt="iWetMyPlants">
+<div class="beta-banner">
+    ⚠️ Early Beta — This project is under active development. Bugs are expected and breaking changes may occur. <a href="#" onclick="openFeedback(); return false;">Feedback welcome.</a>
 </div>
 
-<nav class="device-selector" role="tablist" aria-label="Device type">
-    <button class="device-tab active" role="tab" data-device="hub">Hub</button>
-    <button class="device-tab" role="tab" data-device="remote">Remote</button>
-    <button class="device-tab" role="tab" data-device="greenhouse">Greenhouse</button>
+<div class="hero-logo">
+    <img src="IWMP_Banner.webp" alt="iWetMyPlants — Open Source Plant Monitoring">
+</div>
+
+<nav class="site-nav" role="tablist" aria-label="Site sections" id="main-nav">
+    <button class="nav-tab active" role="tab" data-panel="about" aria-selected="true">About</button>
+    <button class="nav-tab" role="tab" data-panel="installer" aria-selected="false">Installer</button>
+    <div class="nav-dropdown" id="guides-dropdown">
+        <button class="nav-tab" id="guides-toggle" aria-haspopup="true" aria-expanded="false">
+            User Guides ▾
+        </button>
+        <div class="nav-dropdown-menu" role="menu">
+            <a href="https://spiritwrestler.ca/plants/documentation/quick-start.html" class="nav-dropdown-item" target="_blank">📖 Quick Start Guide </span>
+            <a href="https://spiritwrestler.ca/plants/documentation/user-guide.html" class="nav-dropdown-item" target="_blank">📘 User Guide</span>
+            <a href="https://spiritwrestler.ca/plants/documentation/wiring-guide.html" class="nav-dropdown-item" target="_blank">📗 Wiring Guide</span>
+            <a href="https://spiritwrestler.ca/plants/documentation/user-guide-greenhouse.html" class="nav-dropdown-item" target="_blank">📗 Greenhouse User Guide</span>
+            <a href="https://spiritwrestler.ca/plants/documentation/troubleshooting.html" class="nav-dropdown-item" target="_blank">📗 Troubleshooting Guide</span>
+        </div>
+    </div>
 </nav>
 
+
+<!-- ═══════════════════════════ ABOUT PANEL ═══════════════════════════════ -->
+<div class="page-panel active" id="panel-about">
 <main>
 
-    <!-- Device info -->
-    <div class="card" id="device-info-card">
-        <span class="device-badge" id="device-badge">Hub</span>
-        <p id="device-description"></p>
-        <dl class="spec-grid" id="device-specs"></dl>
-        <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-color);">
-            <button class="changelog-toggle" id="changelog-toggle" aria-expanded="false">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                    <path d="M6 8L1 3h10z"/>
-                </svg>
-                What's new in <span id="toggle-version">v1.0.0</span>
-            </button>
-            <div class="changelog-body" id="changelog-body" aria-hidden="true">
-                <!-- Populated by JavaScript from version.json -->
+    <div class="about-hero">
+        <h1>Keep Every Plant Happy — For Free</h1>
+        <p>iWetMyPlants is an open-source soil moisture monitoring system built around the ESP32. Monitor up to 8 sensors, automate your watering, and connect to Home Assistant — all with hardware you can source for under $20.</p>
+        <div class="about-cta-row">
+            <button class="btn-about btn-about-hub" onclick="goToInstaller('hub')">🌿 Flash Hub</button>
+            <button class="btn-about btn-about-remote" onclick="goToInstaller('remote')">🔋 Flash Remote</button>
+            <button class="btn-about btn-about-greenhouse" onclick="goToInstaller('greenhouse')">🌱 Flash Greenhouse</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>What is iWetMyPlants?</h2>
+        <p>A complete, self-hosted plant monitoring network — no cloud, no subscriptions, no ongoing costs. Just open hardware, open firmware, and happy plants.</p>
+        <div class="feature-grid">
+            <div class="feature-item">
+                <span class="feature-icon">💧</span>
+                <h3>Soil Moisture</h3>
+                <p>Capacitive sensors that actually last, providing accurate readings without corroding over time.</p>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">📡</span>
+                <h3>Wireless Network</h3>
+                <p>Sensors talk to the Hub via ESP-NOW — fast, reliable, and works without your WiFi router.</p>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🏠</span>
+                <h3>Home Assistant</h3>
+                <p>Auto-discovers on your network. Your plant data lives in your smart home, where it belongs.</p>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🔋</span>
+                <h3>Battery Friendly</h3>
+                <p>Remote sensors use deep sleep between readings — months of runtime on a single charge.</p>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🌡️</span>
+                <h3>Greenhouse Control</h3>
+                <p>Monitor up to 4 sensors and drive 4 relays for fans, heaters, or pumps with built-in automation.</p>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">💰</span>
+                <h3>Under $20</h3>
+                <p>A full 8-sensor hub setup built from readily available components. No proprietary hardware required.</p>
             </div>
         </div>
     </div>
 
-    <!-- Flash new device via USB -->
+    <div class="card">
+        <h2>The Story Behind the Project</h2>
+        <div class="about-bio">
+            <div class="bio-icon" aria-hidden="true">🧑‍🌾</div>
+            <div class="bio-text">
+                <h3>Brendan — Paramedic, Maker, Reluctant Plant Killer</h3>
+                <p>I'm a paramedic in rural southern Alberta with over two decades of emergency medicine under my belt. I love my garden, I love to tinker, and for years my living room looked less like a lush indoor jungle and more like a houseplant hospice.</p>
+                <p style="margin-top:0.65rem;">So I built something about it. What started as a wild idea turned into hundreds of hours of learning, debugging, swearing at ESP32 chips, and eventually — something that actually works. Something I'm genuinely proud of.</p>
+                <p style="margin-top:0.65rem;">I believe in free and open source software. No subscriptions. No purchase costs. No maintenance fees. Just something people can tinker with, learn from, and make their own. If a few more gardens stay green because of this project, the world is a fractionally better place — and that's worth every late night.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Join the Project</h2>
+        <p>This is a one-person project built alongside a full-time job and a family. Collaborators are genuinely welcome — whether you can write code, test hardware, improve documentation, or just file a clear bug report. Every contribution matters.</p>
+        <div class="support-grid">
+            <div class="support-option">
+                <span class="icon">🐛</span>
+                <h4>Found a Bug?</h4>
+                <p>Bug reports and feedback are the lifeblood of open source. Please keep them coming.</p>
+                <button onclick="openFeedback()">Send Feedback</button>
+            </div>
+            <div class="support-option">
+                <span class="icon">🤝</span>
+                <h4>Collaborate</h4>
+                <p>Code, docs, hardware testing — all contributions welcome. Check out the repo and open a PR.</p>
+                <a href="https://github.com/SpiritWrestlerSolutions/iWetMyPlants" target="_blank" rel="noopener" class="btn-github">View on GitHub</a>
+            </div>
+            <div class="support-option">
+                <span class="icon">☕</span>
+                <h4>Buy Me a Coffee</h4>
+                <p>Hardware costs money. Hosting costs money. Caffeine costs money. If this helped you, a small contribution goes a long way.</p>
+                <a href="https://ko-fi.com/iwetmyplants" target="_blank" rel="noopener">Support on Ko-fi</a>
+            </div>
+        </div>
+    </div>
+
+</main>
+</div>
+
+
+<!-- ══════════════════════════ INSTALLER PANEL ════════════════════════════ -->
+<div class="page-panel" id="panel-installer">
+<main>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+        <nav class="device-selector" role="tablist" aria-label="Device type" id="device-selector-nav">
+            <button class="device-tab active" role="tab" data-device="hub">Hub</button>
+            <button class="device-tab" role="tab" data-device="remote">Remote</button>
+            <button class="device-tab" role="tab" data-device="greenhouse">Greenhouse</button>
+        </nav>
+        <div style="padding:1.5rem;">
+            <span class="device-badge" id="device-badge">Hub</span>
+            <p id="device-description"></p>
+            <dl class="spec-grid" id="device-specs"></dl>
+            <div style="margin-top:1rem; padding-top:0.75rem; border-top:1px solid var(--border-color);">
+                <button class="changelog-toggle" id="changelog-toggle" aria-expanded="false">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M6 8L1 3h10z"/></svg>
+                    What's new in <span id="toggle-version">v1.0.0</span>
+                </button>
+                <div class="changelog-body" id="changelog-body" aria-hidden="true"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <h2>Flash New Device</h2>
-        <p>
-            Connect your ESP32 via USB and click <strong>Connect &amp; Install</strong>.
-            This will erase the board and install fresh firmware.
-            Requires Chrome or Edge on desktop.
-        </p>
+        <p>Connect your ESP32 via USB and click <strong>Connect &amp; Install</strong>. This will erase the board and install fresh firmware. Requires Chrome or Edge on desktop.</p>
 
-        <!-- Hub-only: step-by-step Improv WiFi guide (shown/hidden by selectDevice) -->
         <ol class="setup-steps" id="hub-steps" style="display:none;">
             <li>Click <strong>Connect &amp; Install</strong> and select your Hub's USB port</li>
             <li>Wait ~30 seconds for firmware to flash and the Hub to reboot</li>
@@ -495,85 +804,58 @@
         <ol class="setup-steps" id="remote-steps" style="display:none;">
             <li>Click <strong>Connect &amp; Install</strong> and select your Remote's USB port</li>
             <li>Wait ~30 seconds for firmware to flash and the Remote to reboot</li>
-            <li>A <strong>Configure WiFi</strong> dialog will appear � enter your home network SSID and password</li>
+            <li>A <strong>Configure WiFi</strong> dialog will appear — enter your home network SSID and password</li>
             <li>The Remote connects and shows an <strong>Open Device</strong> link to its web interface</li>
         </ol>
         <ol class="setup-steps" id="greenhouse-steps" style="display:none;">
             <li>Click <strong>Connect &amp; Install</strong> and select your Greenhouse's USB port</li>
             <li>Wait ~30 seconds for firmware to flash and the Greenhouse to reboot</li>
-            <li>A <strong>Configure WiFi</strong> dialog will appear � enter your home network SSID and password</li>
+            <li>A <strong>Configure WiFi</strong> dialog will appear — enter your home network SSID and password</li>
             <li>The Greenhouse connects and shows an <strong>Open Device</strong> link to its web interface</li>
         </ol>
 
         <div class="browser-note" id="serial-warning" style="display:none;">
-            Web Serial is not supported in this browser.
-            Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop) to flash via USB.
+            Web Serial is not supported in this browser. Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop) to flash via USB.
         </div>
 
         <esp-web-install-button id="install-btn" manifest="install/hub.json">
             <button class="btn btn-primary" slot="activate">Connect &amp; Install</button>
-            <!-- Suppress the built-in unsupported message; we show our own above -->
             <span slot="unsupported"></span>
         </esp-web-install-button>
 
         <div class="status-msg" id="flash-status"></div>
 
-        <!-- Hub-only: fallback instructions if the WiFi dialog doesn't appear -->
         <p class="fallback-note" id="hub-fallback" style="display:none;">
-            No WiFi dialog? Connect another device to the <strong>IWMP-Hub-XXXXXX</strong> WiFi
-            network and visit <code>http://192.168.4.1</code> to configure manually.
+            No WiFi dialog? Connect another device to the <strong>IWMP-Hub-XXXXXX</strong> WiFi network and visit <code>http://192.168.4.1</code> to configure manually.
         </p>
-
-        <!-- Remote: post-flash WiFi setup instructions -->
         <p class="fallback-note" id="remote-fallback" style="display:none;">
-            After flashing, the Remote creates a WiFi network named <strong>IWMP-Remote-XXXXXX</strong>.
-            Connect to it from your phone or computer, then visit <code>http://192.168.4.1</code>
-            to enter your home WiFi credentials.
+            After flashing, the Remote creates a WiFi network named <strong>IWMP-Remote-XXXXXX</strong>. Connect to it from your phone or computer, then visit <code>http://192.168.4.1</code> to enter your home WiFi credentials.
         </p>
-
-        <!-- Greenhouse: post-flash WiFi setup instructions -->
         <p class="fallback-note" id="greenhouse-fallback" style="display:none;">
-            After flashing, the Greenhouse creates a WiFi network named <strong>IWMP-GH-XXXXXX</strong>.
-            Connect to it from your phone or computer, then visit <code>http://192.168.4.1</code>
-            to enter your home WiFi credentials.
+            After flashing, the Greenhouse creates a WiFi network named <strong>IWMP-GH-XXXXXX</strong>. Connect to it from your phone or computer, then visit <code>http://192.168.4.1</code> to enter your home WiFi credentials.
         </p>
     </div>
 
     <div class="section-divider">or update an existing device</div>
 
-    <!-- OTA update for devices already on the network -->
     <div class="card">
         <h2>Update via OTA</h2>
-        <p>
-            For devices already running iWetMyPlants firmware and connected to your network.
-            Enter the device IP, select a firmware file, then click <strong>Update Firmware</strong>.
-        </p>
+        <p>For devices already running iWetMyPlants firmware and connected to your network. Enter the device IP, select a firmware file, then click <strong>Update Firmware</strong>.</p>
 
         <div class="browser-note" style="margin-bottom:1rem;">
-            <strong>Note:</strong> Your browser will send this request directly to the device on your local network.
-            The device firmware must serve <code>Access-Control-Allow-Origin: *</code> headers on
-            <code>/api/system/ota</code> for this to work from an external page.
-            If it fails with a CORS error, use the device's own Settings page (at its local IP) to upload firmware instead.
+            <strong>Note:</strong> Your browser sends this request directly to the device on your local network. The device firmware must serve <code>Access-Control-Allow-Origin: *</code> headers on <code>/api/system/ota</code> for this to work from an external page. If you get a CORS error, use the device's own Settings page at its local IP instead.
         </div>
 
         <div class="form-group">
             <label for="device-ip">Device IP Address</label>
-            <input type="text" id="device-ip" placeholder="192.168.1.100"
-                   autocomplete="off" spellcheck="false" inputmode="url">
-            <div class="helper-text">
-                Find the IP on your router's DHCP list, or check the Hub's Devices page.
-            </div>
+            <input type="text" id="device-ip" placeholder="192.168.1.100" autocomplete="off" spellcheck="false" inputmode="url">
+            <div class="helper-text">Find the IP on your router's DHCP list, or check the Hub's Devices page.</div>
         </div>
 
         <div class="form-group">
-            <label for="ota-file">
-                Firmware File (.bin)
-                <span style="font-weight:400; color:var(--text-muted);">— optional</span>
-            </label>
+            <label for="ota-file">Firmware File (.bin) <span style="font-weight:400; color:var(--text-muted);">— optional</span></label>
             <input type="file" id="ota-file" accept=".bin">
-            <div class="helper-text">
-                Leave blank to use the latest release build for the selected device type.
-            </div>
+            <div class="helper-text">Leave blank to use the latest release build for the selected device type.</div>
         </div>
 
         <div class="btn-row">
@@ -595,31 +877,118 @@
     </div>
 
 </main>
+</div>
+
 
 <footer class="footer">
-    <a href="https://github.com/SpiritWrestlerSolutions/iWetMyPlants" target="_blank" rel="noopener">
-        iWetMyPlants on GitHub
-    </a>
-    
+    <div class="footer-links">
+        <a href="https://github.com/SpiritWrestlerSolutions/iWetMyPlants" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://ko-fi.com/iwetmyplants" target="_blank" rel="noopener">Support on Ko-fi</a>
+        <button onclick="openFeedback()" style="background:none;border:none;cursor:pointer;color:var(--primary-color);font-size:0.8rem;font-family:var(--font-body);padding:0;">Bug Report / Feedback</button>
+    </div>
+    <div>iWetMyPlants — Free and Open Source. Made with 🌿 in rural Alberta, Canada.</div>
 </footer>
 
+<button class="feedback-fab" onclick="openFeedback()" aria-label="Send feedback or bug report">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    <span>Feedback</span>
+</button>
+
+
+<!-- ══════════════════════════ FEEDBACK MODAL ═════════════════════════════ -->
+<div class="modal-overlay" id="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+    <div class="modal">
+        <button class="modal-close" onclick="closeFeedback()" aria-label="Close">&times;</button>
+        <h2 id="feedback-title">Bug Report / Feedback</h2>
+        <p>Spotted something broken, or have a suggestion? I'd love to hear it. This goes straight to <strong>iwmp@spiritwrestler.ca</strong>.</p>
+
+        <div id="feedback-form-wrap">
+            <div class="form-group">
+                <label for="fb-type">Type</label>
+                <select id="fb-type">
+                    <option value="bug">🐛 Bug Report</option>
+                    <option value="feature">💡 Feature Request</option>
+                    <option value="question">❓ Question</option>
+                    <option value="other">💬 Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="fb-name">Your Name <span style="font-weight:400;color:var(--text-muted);">— optional</span></label>
+                <input type="text" id="fb-name" placeholder="What should I call you?">
+            </div>
+            <div class="form-group">
+                <label for="fb-email">Email <span style="font-weight:400;color:var(--text-muted);">— optional, for follow-up</span></label>
+                <input type="email" id="fb-email" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="honeypot" aria-hidden="true">
+                <label for="fb-website">Website</label>
+                <input type="text" id="fb-website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="fb-message">Details <span style="color:#c62828;">*</span></label>
+                <textarea id="fb-message" placeholder="Describe what happened, what you expected, and what device/browser you're using..."></textarea>
+            </div>
+            <div class="btn-row" style="margin-top:0.5rem;">
+                <button class="btn btn-primary" onclick="submitFeedback()">Send Feedback</button>
+                <button class="btn btn-outline" onclick="closeFeedback()">Cancel</button>
+            </div>
+        </div>
+
+        <div class="status-msg" id="feedback-status"></div>
+
+        <p class="text-muted mt-2" style="font-size:0.775rem;">
+            Sent via <a href="https://formspree.io" target="_blank" rel="noopener">Formspree</a>. No account required.
+            You can also open an issue directly on <a href="https://github.com/SpiritWrestlerSolutions/iWetMyPlants/issues" target="_blank" rel="noopener">GitHub</a>.
+        </p>
+    </div>
+</div>
+
+
 <script>
-// ── Version & changelog ───────────────────────────────────────────────────────
+
+const navTabs = document.querySelectorAll('.nav-tab[data-panel]');
+const panels  = document.querySelectorAll('.page-panel');
+
+function showPanel(panelId) {
+    panels.forEach(p => p.classList.toggle('active', p.id === 'panel-' + panelId));
+    navTabs.forEach(t => {
+        t.classList.toggle('active', t.dataset.panel === panelId);
+        t.setAttribute('aria-selected', t.dataset.panel === panelId);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+navTabs.forEach(tab => tab.addEventListener('click', () => showPanel(tab.dataset.panel)));
+
+function goToInstaller(deviceKey) {
+    showPanel('installer');
+    selectDevice(deviceKey);
+}
+
+const guidesDropdown = document.getElementById('guides-dropdown');
+const guidesToggle   = document.getElementById('guides-toggle');
+
+guidesToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = guidesDropdown.classList.toggle('open');
+    guidesToggle.setAttribute('aria-expanded', isOpen);
+});
+document.addEventListener('click', () => {
+    guidesDropdown.classList.remove('open');
+    guidesToggle.setAttribute('aria-expanded', false);
+});
 
 (async function loadVersion() {
     try {
         const res = await fetch('version.json', { cache: 'no-cache' });
         if (!res.ok) return;
         const data = await res.json();
-
         if (data.version) {
             document.getElementById('header-version').textContent = 'v' + data.version;
             document.getElementById('toggle-version').textContent  = 'v' + data.version;
-
-            // Update manifests version display (informational only — manifest files
-            // are updated by the CI/CD build process)
         }
-
         if (Array.isArray(data.changelog) && data.changelog.length) {
             const body = document.getElementById('changelog-body');
             body.innerHTML = data.changelog.map(entry => `
@@ -629,9 +998,7 @@
                 </div>
             `).join('');
         }
-    } catch (e) {
-        // version.json not present — silently skip
-    }
+    } catch (e) {}
 })();
 
 const changelogToggle = document.getElementById('changelog-toggle');
@@ -644,16 +1011,12 @@ changelogToggle.addEventListener('click', () => {
     changelogBody.setAttribute('aria-hidden', !open);
 });
 
-// ── Firmware manifests (inline — bypasses server caching entirely) ────────────
-// Full https:// URLs mean path resolution is always unambiguous regardless of
-// what URL the manifest blob itself is served from.
-
 const _FW = 'https://spiritwrestler.ca/plants/firmware/';
 const _MANIFESTS = {
     hub: {
         name: 'iWetMyPlants Hub',
         new_install_prompt_erase: true,
-        improv_wifi_serial_timeout: 30,  // 30s for Hub to boot into AP mode + start Improv
+        improv_wifi_serial_timeout: 30,
         builds: [{ chipFamily: 'ESP32', parts: [
             { path: _FW + 'hub/bootloader.bin', offset: 4096  },
             { path: _FW + 'hub/partitions.bin', offset: 32768 },
@@ -663,7 +1026,7 @@ const _MANIFESTS = {
     remote: {
         name: 'iWetMyPlants Remote',
         new_install_prompt_erase: true,
-        improv_wifi_serial_timeout: 0,   // Remote: native USB CDC re-enumerates on reset; Improv unreliable
+        improv_wifi_serial_timeout: 0,
         builds: [{ chipFamily: 'ESP32-C3', parts: [
             { path: _FW + 'remote/bootloader.bin', offset: 0     },
             { path: _FW + 'remote/partitions.bin', offset: 32768 },
@@ -673,7 +1036,7 @@ const _MANIFESTS = {
     greenhouse: {
         name: 'iWetMyPlants Greenhouse',
         new_install_prompt_erase: true,
-        improv_wifi_serial_timeout: 30,  // 30s for Greenhouse to boot into AP mode + start Improv
+        improv_wifi_serial_timeout: 30,
         builds: [{ chipFamily: 'ESP32', parts: [
             { path: _FW + 'greenhouse/bootloader.bin', offset: 4096  },
             { path: _FW + 'greenhouse/partitions.bin', offset: 32768 },
@@ -690,62 +1053,33 @@ function getManifestUrl(key) {
     return _manifestBlobUrls[key];
 }
 
-// ── Device definitions ────────────────────────────────────────────────────────
-
 const DEVICES = {
     hub: {
         label: 'Hub',
-        description: 'The central coordinator for your iWetMyPlants network. Receives sensor data ' +
-                     'from Remote and Greenhouse nodes via ESP-NOW, bridges to MQTT / Home Assistant, ' +
-                     'and manages a registry of paired devices.',
-        specs: {
-            'Board':        'ESP32 (WROOM / S3)',
-            'Role':         'Gateway & MQTT bridge',
-            'Sensors':      'Up to 8',
-            'Connectivity': 'WiFi + ESP-NOW',
-        },
+        description: 'The central coordinator for your iWetMyPlants network. Receives sensor data from Remote and Greenhouse nodes via ESP-NOW, bridges to MQTT / Home Assistant, and manages a registry of paired devices.',
+        specs: { 'Board': 'ESP32 (WROOM / S3)', 'Role': 'Gateway & MQTT bridge', 'Sensors': 'Up to 8', 'Connectivity': 'WiFi + ESP-NOW' },
     },
     remote: {
         label: 'Remote',
-        description: 'A battery-powered single-sensor node designed for ultra-low power consumption. ' +
-                     'Wakes briefly to take a moisture reading, transmits to the Hub via ESP-NOW, ' +
-                     'then returns to deep sleep.',
-        specs: {
-            'Board':        'ESP32-C3 SuperMini',
-            'Role':         'Battery sensor node',
-            'Sensors':      '1 (capacitive moisture)',
-            'Connectivity': 'ESP-NOW only',
-            'Power':        'Deep sleep between readings',
-        },
+        description: 'A battery-powered single-sensor node designed for ultra-low power consumption. Wakes briefly to take a moisture reading, transmits to the Hub via ESP-NOW, then returns to deep sleep.',
+        specs: { 'Board': 'ESP32-C3 SuperMini', 'Role': 'Battery sensor node', 'Sensors': '1 (capacitive moisture)', 'Connectivity': 'ESP-NOW only', 'Power': 'Deep sleep between readings' },
     },
     greenhouse: {
         label: 'Greenhouse',
-        description: 'A mains-powered multi-sensor node with relay control. Monitors up to 4 sensors ' +
-                     'and drives up to 4 relays with built-in automation rules for environmental control.',
-        specs: {
-            'Board':        'ESP32 (WROOM / S3)',
-            'Role':         'Environmental controller',
-            'Sensors':      'Up to 4',
-            'Relays':       'Up to 4',
-            'Connectivity': 'WiFi + ESP-NOW',
-        },
+        description: 'A mains-powered multi-sensor node with relay control. Monitors up to 4 sensors and drives up to 4 relays with built-in automation rules for environmental control.',
+        specs: { 'Board': 'ESP32 (WROOM / S3)', 'Role': 'Environmental controller', 'Sensors': 'Up to 4', 'Relays': 'Up to 4', 'Connectivity': 'WiFi + ESP-NOW' },
     },
 };
 
-// ── State ─────────────────────────────────────────────────────────────────────
-
 let activeDevice = 'hub';
 
-// ── DOM refs ──────────────────────────────────────────────────────────────────
-
-const tabs         = document.querySelectorAll('.device-tab');
+const deviceTabs   = document.querySelectorAll('.device-tab');
 const installBtn   = document.getElementById('install-btn');
 const badge        = document.getElementById('device-badge');
 const descEl       = document.getElementById('device-description');
 const specsEl      = document.getElementById('device-specs');
 const serialWarn   = document.getElementById('serial-warning');
 const flashStatus  = document.getElementById('flash-status');
-
 const ipInput      = document.getElementById('device-ip');
 const fileInput    = document.getElementById('ota-file');
 const pingBtn      = document.getElementById('ping-btn');
@@ -756,18 +1090,13 @@ const progressPct  = document.getElementById('progress-pct');
 const progressLbl  = document.getElementById('progress-label');
 const otaStatus    = document.getElementById('ota-status');
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function setMsg(el, text, type) {
     el.textContent = text;
     el.className   = 'status-msg' + (text ? ' visible ' + type : '');
 }
 
 function setProgress(pct, label) {
-    if (pct < 0) {
-        progressWrap.classList.remove('visible');
-        return;
-    }
+    if (pct < 0) { progressWrap.classList.remove('visible'); return; }
     progressWrap.classList.add('visible');
     progressFill.style.width = pct + '%';
     progressPct.textContent  = pct + '%';
@@ -778,26 +1107,17 @@ function getIp() {
     return ipInput.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
-// ── Device tab switcher ───────────────────────────────────────────────────────
-
 function selectDevice(key) {
     activeDevice = key;
     const d = DEVICES[key];
-
-    tabs.forEach(t => t.classList.toggle('active', t.dataset.device === key));
-
-    badge.textContent   = d.label;
-    descEl.textContent  = d.description;
-    specsEl.innerHTML   = Object.entries(d.specs)
-        .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
-        .join('');
-
+    deviceTabs.forEach(t => t.classList.toggle('active', t.dataset.device === key));
+    badge.textContent  = d.label;
+    descEl.textContent = d.description;
+    specsEl.innerHTML  = Object.entries(d.specs).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     installBtn.setAttribute('manifest', getManifestUrl(key));
     setMsg(flashStatus, '', '');
     setMsg(otaStatus,   '', '');
     setProgress(-1);
-
-    // Show device-specific post-flash guidance
     document.getElementById('hub-steps').style.display           = (key === 'hub')        ? '' : 'none';
     document.getElementById('hub-fallback').style.display        = (key === 'hub')        ? '' : 'none';
     document.getElementById('remote-steps').style.display        = (key === 'remote')     ? '' : 'none';
@@ -806,37 +1126,25 @@ function selectDevice(key) {
     document.getElementById('greenhouse-fallback').style.display = (key === 'greenhouse') ? '' : 'none';
 }
 
-tabs.forEach(tab => tab.addEventListener('click', () => selectDevice(tab.dataset.device)));
+deviceTabs.forEach(tab => tab.addEventListener('click', () => selectDevice(tab.dataset.device)));
 selectDevice('hub');
 
-// ── Web Serial detection ──────────────────────────────────────────────────────
-
-if (!('serial' in navigator)) {
-    serialWarn.style.display = 'block';
-}
-
-// ── Check connection (ping) ───────────────────────────────────────────────────
+if (!('serial' in navigator)) { serialWarn.style.display = 'block'; }
 
 pingBtn.addEventListener('click', async () => {
     const ip = getIp();
     if (!ip) { setMsg(otaStatus, 'Enter a device IP address.', 'error'); return; }
-
     pingBtn.disabled = true;
     setMsg(otaStatus, 'Checking connection\u2026', 'info');
-
     try {
-        const res = await fetch(`http://${ip}/api/system/info`, {
-            signal: AbortSignal.timeout(5000),
-        });
+        const res = await fetch(`http://${ip}/api/system/info`, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
         const info = await res.json();
         const parts = [
             info.version   ? `v${info.version}`             : null,
             info.device_id ? `ID\u00a0${info.device_id}`    : null,
             info.free_heap ? `Heap\u00a0${info.free_heap}B` : null,
         ].filter(Boolean).join('\u2002\u00b7\u2002');
-
         setMsg(otaStatus, `Connected\u2014 ${parts || 'device online'}`, 'success');
     } catch (e) {
         setMsg(otaStatus, `Could not reach device: ${e.message}`, 'error');
@@ -845,26 +1153,17 @@ pingBtn.addEventListener('click', async () => {
     }
 });
 
-// ── OTA firmware upload ───────────────────────────────────────────────────────
-
 otaBtn.addEventListener('click', async () => {
     const ip = getIp();
     if (!ip) { setMsg(otaStatus, 'Enter a device IP address.', 'error'); return; }
-
     let file = fileInput.files[0] || null;
-
-    // If no file selected, attempt to fetch the pre-built binary for the active device type.
-    // This path will be populated by CI/CD (e.g., GitHub Actions building and committing to firmware/).
     if (!file) {
         const firmwarePath = `https://spiritwrestler.ca/plants/firmware/${activeDevice}/firmware.bin`;
         setMsg(otaStatus, 'No file selected\u2014 fetching latest build\u2026', 'info');
         setProgress(0, 'Downloading firmware\u2026');
         try {
             const res = await fetch(firmwarePath);
-            if (!res.ok) throw new Error(
-                `Could not fetch pre-built firmware (${res.status}). ` +
-                'Select a .bin file manually or build from source.'
-            );
+            if (!res.ok) throw new Error(`Could not fetch pre-built firmware (${res.status}). Select a .bin file manually or build from source.`);
             const blob = await res.blob();
             file = new File([blob], `${activeDevice}_firmware.bin`, { type: 'application/octet-stream' });
             setProgress(-1);
@@ -874,25 +1173,20 @@ otaBtn.addEventListener('click', async () => {
             return;
         }
     }
-
     setMsg(otaStatus, '', '');
     setProgress(0, 'Uploading firmware\u2026');
     otaBtn.disabled  = true;
     pingBtn.disabled = true;
-
     const form = new FormData();
     form.append('firmware', file);
-
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `http://${ip}/api/system/ota`);
-    xhr.timeout = 120_000; // 2 minutes
-
+    xhr.timeout = 120_000;
     xhr.upload.onprogress = (e) => {
         if (!e.lengthComputable) return;
         const pct = Math.round((e.loaded / e.total) * 100);
         setProgress(pct, pct < 100 ? 'Uploading firmware\u2026' : 'Flashing\u2026');
     };
-
     xhr.onload = () => {
         setProgress(-1);
         if (xhr.status === 200) {
@@ -903,30 +1197,82 @@ otaBtn.addEventListener('click', async () => {
         otaBtn.disabled  = false;
         pingBtn.disabled = false;
     };
-
-    // A network error immediately after a large upload typically means the device
-    // rebooted mid-XHR — treat it as a likely success.
     xhr.onerror = () => {
         setProgress(-1);
-        setMsg(
-            otaStatus,
-            'Connection closed \u2014 the device may have rebooted after flashing. ' +
-            'Wait a few seconds, then use Check Connection to confirm.',
-            'warning'
-        );
+        setMsg(otaStatus, 'Connection closed \u2014 the device may have rebooted after flashing. Wait a few seconds, then use Check Connection to confirm.', 'warning');
         otaBtn.disabled  = false;
         pingBtn.disabled = false;
     };
-
     xhr.ontimeout = () => {
         setProgress(-1);
         setMsg(otaStatus, 'Request timed out. Check the device IP and network connection.', 'error');
         otaBtn.disabled  = false;
         pingBtn.disabled = false;
     };
-
     xhr.send(form);
 });
+
+const FORMSPREE_ID = 'YOUR_FORMSPREE_ID';
+
+const feedbackModal  = document.getElementById('feedback-modal');
+const feedbackStatus = document.getElementById('feedback-status');
+
+function openFeedback() {
+    feedbackModal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    setMsg(feedbackStatus, '', '');
+    document.getElementById('feedback-form-wrap').style.display = '';
+}
+function closeFeedback() {
+    feedbackModal.classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+feedbackModal.addEventListener('click', (e) => { if (e.target === feedbackModal) closeFeedback(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFeedback(); });
+
+async function submitFeedback() {
+    if (document.getElementById('fb-website').value) return;
+
+    const message = document.getElementById('fb-message').value.trim();
+    if (!message) { setMsg(feedbackStatus, 'Please describe the issue or suggestion.', 'error'); return; }
+
+    const type  = document.getElementById('fb-type').value;
+    const name  = document.getElementById('fb-name').value.trim();
+    const email = document.getElementById('fb-email').value.trim();
+
+    const submitBtn = feedbackModal.querySelector('.btn-primary');
+    submitBtn.disabled = true;
+    setMsg(feedbackStatus, 'Sending\u2026', 'info');
+
+    try {
+        const res = await fetch(`https://formspree.io/f/${FORMSPREE_ID}`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                type,
+                name:     name  || '(anonymous)',
+                email:    email || '(not provided)',
+                message,
+                _subject: `[iWetMyPlants] ${type.charAt(0).toUpperCase() + type.slice(1)}: ${message.slice(0, 60)}`,
+            }),
+        });
+        if (res.ok) {
+            setMsg(feedbackStatus, 'Thank you! Your feedback has been sent.', 'success');
+            document.getElementById('feedback-form-wrap').style.display = 'none';
+            ['fb-name','fb-email','fb-message'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('fb-type').value = 'bug';
+        } else {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `Server error (${res.status})`);
+        }
+    } catch (e) {
+        setMsg(feedbackStatus, `Could not send — ${e.message}. You can also email iwmp@spiritwrestler.ca directly.`, 'error');
+    } finally {
+        submitBtn.disabled = false;
+    }
+}
+
 </script>
 
 </body>

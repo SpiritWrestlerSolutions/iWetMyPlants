@@ -313,7 +313,7 @@ The Remote also creates a hotspot on first boot: `IWMP-Remote-XXXXXX`. Connect t
 - **WiFi network** — your home WiFi
 - **Hub Address** — the IP address of your Hub (e.g. `192.168.1.100`)
 
-After saving, the Remote reboots, joins your WiFi, and starts reporting moisture readings to the Hub every 5 minutes (configurable).
+After saving, the Remote reboots, joins your WiFi, and starts reporting moisture readings to the Hub every 60 seconds (configurable).
 
 #### Accessing the Remote after setup
 
@@ -519,8 +519,7 @@ Credentials are stored in the ESP32's **NVS (Non-Volatile Storage)** — a dedic
 
 ### Q: How do I factory reset a device?
 
-- **Via web UI:** Settings → Factory Reset
-- **Via hardware:** hold the BOOT button (GPIO 0) for 10 seconds during operation — the device will reset its config and reboot into AP mode
+- **Via web UI:** Settings → Factory Reset (the only method — there is no hardware button hold for factory reset)
 
 ---
 
