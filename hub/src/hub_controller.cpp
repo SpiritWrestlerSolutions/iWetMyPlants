@@ -198,6 +198,10 @@ void HubController::handleWifiConnectState() {
         return;
     }
 
+    // Keep Improv responsive while awaiting WiFi — ensures the installer
+    // can detect the device and (re-)provision even if credentials fail.
+    _improv.loop();
+
     // Check for timeout
     if ((millis() - _state_enter_time) > WIFI_CONNECT_TIMEOUT_MS) {
         LOG_W(TAG, "WiFi connection timeout, entering AP mode");
@@ -257,6 +261,9 @@ void HubController::handleMqttConnectState() {
         enterState(HubState::OPERATIONAL);
         return;
     }
+
+    // Keep Improv responsive during MQTT connection wait
+    _improv.loop();
 
     // Check for timeout
     if ((millis() - _state_enter_time) > MQTT_CONNECT_TIMEOUT_MS) {

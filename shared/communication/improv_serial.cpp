@@ -249,32 +249,30 @@ void ImprovSerial::sendRpcResult(const String& url) {
 void ImprovSerial::sendPacket(uint8_t type, const uint8_t* data, uint8_t len) {
     if (!_serial) return;
 
+    // Build the full packet in a stack buffer and send in one write() call.
+    // HardwareSerial::write(buf, n) holds the UART TX mutex for the entire
+    // operation — this prevents FreeRTOS tasks (AsyncWebServer callbacks,
+    // logger) from inserting bytes mid-frame, which corrupts the binary
+    // protocol and causes checksum mismatches that silently drop the packet.
+    uint8_t buf[270];
+    uint8_t pos = 0;
     uint8_t chk = 0;
 
-    // Magic
-    _serial->write(MAGIC, 6);
+    memcpy(&buf[pos], MAGIC, 6);
     for (int i = 0; i < 6; i++) chk += MAGIC[i];
+    pos += 6;
 
-    // Version
-    _serial->write(VERSION);
-    chk += VERSION;
+    buf[pos] = VERSION;  chk += VERSION;  pos++;
+    buf[pos] = type;     chk += type;     pos++;
+    buf[pos] = len;      chk += len;      pos++;
 
-    // Type
-    _serial->write(type);
-    chk += type;
-
-    // Data length
-    _serial->write(len);
-    chk += len;
-
-    // Data
     for (uint8_t i = 0; i < len; i++) {
-        _serial->write(data[i]);
+        buf[pos++] = data[i];
         chk += data[i];
     }
 
-    // Checksum
-    _serial->write(chk);
+    buf[pos++] = chk;
+    _serial->write(buf, pos);
 }
 
 void ImprovSerial::broadcastProvisioned(const String& url) {

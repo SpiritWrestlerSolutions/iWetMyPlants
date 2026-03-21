@@ -27,8 +27,12 @@ void setup() {
     LOG_I(TAG, "iWetMyPlants v%s - Hub", IWMP_VERSION);
     LOG_I(TAG, "========================================");
 
-    // Initialize logger
+    // Initialize logger — DEBUG in dev builds, INFO in production
+#ifdef IWMP_DEBUG
     Log.setLevel(LogLevel::DEBUG);
+#else
+    Log.setLevel(LogLevel::INFO);
+#endif
     Log.setColors(true);
     Log.setTimestamps(true);
 

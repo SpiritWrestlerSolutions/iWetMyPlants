@@ -835,7 +835,7 @@
         <p>For devices already running iWetMyPlants firmware and connected to your network. Enter the device IP, select a firmware file, then click <strong>Update Firmware</strong>.</p>
 
         <div class="browser-note" style="margin-bottom:1rem;">
-            <strong>Note:</strong> Your browser sends this request directly to the device on your local network. The device firmware must serve <code>Access-Control-Allow-Origin: *</code> headers on <code>/api/system/ota</code> for this to work from an external page. If you get a CORS error, use the device's own Settings page at its local IP instead.
+            <strong>Note:</strong> Your browser sends this request directly to the device on your local network. For this to work from an external page, the device firmware must allow CORS on <code>/api/system/info</code> and <code>/api/system/ota</code>. If this page is loaded over HTTPS, some browsers may also block plain HTTP access to local IPs. If that happens, use the device's own Settings page at its local IP instead.
         </div>
 
         <div class="form-group">
@@ -983,12 +983,33 @@ document.addEventListener('click', () => {
         }
         if (Array.isArray(data.changelog) && data.changelog.length) {
             const body = document.getElementById('changelog-body');
-            body.innerHTML = data.changelog.map(entry => `
-                <div class="changelog-entry">
-                    <h3>v${entry.version} <span style="font-weight:400;color:var(--text-muted);">&mdash; ${entry.date}</span></h3>
-                    <ul>${entry.notes.map(n => `<li>${n}</li>`).join('')}</ul>
-                </div>
-            `).join('');
+            body.replaceChildren();
+            data.changelog.forEach((entry) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'changelog-entry';
+
+                const heading = document.createElement('h3');
+                heading.textContent = `v${entry.version || ''} `;
+
+                const date = document.createElement('span');
+                date.style.fontWeight = '400';
+                date.style.color = 'var(--text-muted)';
+                date.textContent = `\u2014 ${entry.date || ''}`;
+                heading.appendChild(date);
+
+                const notes = document.createElement('ul');
+                if (Array.isArray(entry.notes)) {
+                    entry.notes.forEach((note) => {
+                        const item = document.createElement('li');
+                        item.textContent = String(note);
+                        notes.appendChild(item);
+                    });
+                }
+
+                wrapper.appendChild(heading);
+                wrapper.appendChild(notes);
+                body.appendChild(wrapper);
+            });
         }
     } catch (e) {}
 })();
@@ -1096,7 +1117,69 @@ function setProgress(pct, label) {
 }
 
 function getIp() {
-    return ipInput.value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return ipInput.value.trim();
+}
+
+function normalizeDeviceAddress(value) {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+
+    try {
+        const url = new URL(withScheme);
+        if (!url.hostname) return null;
+        return {
+            origin: url.origin,
+            host: url.host,
+            hostname: url.hostname,
+            protocol: url.protocol,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function isPrivateHostname(hostname) {
+    const lower = hostname.toLowerCase();
+    if (lower === 'localhost' || lower.endsWith('.local')) return true;
+
+    const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+    if (!ipv4) return false;
+
+    const a = Number(ipv4[1]);
+    const b = Number(ipv4[2]);
+    return a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+}
+
+function getNetworkConstraintMessage(target) {
+    if (!target) return '';
+    if (location.protocol === 'https:' && target.protocol === 'http:' && isPrivateHostname(target.hostname)) {
+        return 'This page is loaded over HTTPS, and your browser may block plain HTTP requests to local devices. Open the device\'s own web UI from its local IP, or serve this installer from the same local network over HTTP.';
+    }
+    return '';
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function describeFetchError(error, target) {
+    const constraint = getNetworkConstraintMessage(target);
+    if (constraint && (error.name === 'TypeError' || error.name === 'AbortError')) return constraint;
+    if (error.name === 'AbortError') return 'Request timed out. Check the device IP and confirm that the device is awake and on the same network.';
+    if (error instanceof TypeError) return 'The browser blocked the request or could not reach the device. Check the IP, confirm the device exposes CORS headers, and try from the device\'s own local web page if needed.';
+    return error.message || 'Unexpected network error.';
+}
+
+function describeXhrFailure(target) {
+    return getNetworkConstraintMessage(target) || 'The browser blocked the request or the connection closed unexpectedly. If this page is hosted externally, try using the device\'s own local Settings page for OTA updates.';
 }
 
 function selectDevice(key) {
@@ -1124,12 +1207,12 @@ selectDevice('hub');
 if (!('serial' in navigator)) { serialWarn.style.display = 'block'; }
 
 pingBtn.addEventListener('click', async () => {
-    const ip = getIp();
-    if (!ip) { setMsg(otaStatus, 'Enter a device IP address.', 'error'); return; }
+    const target = normalizeDeviceAddress(getIp());
+    if (!target) { setMsg(otaStatus, 'Enter a valid device IP address or hostname.', 'error'); return; }
     pingBtn.disabled = true;
     setMsg(otaStatus, 'Checking connection\u2026', 'info');
     try {
-        const res = await fetch(`http://${ip}/api/system/info`, { signal: AbortSignal.timeout(5000) });
+        const res = await fetchWithTimeout(`${target.origin}/api/system/info`, { mode: 'cors' }, 5000);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const info = await res.json();
         const parts = [
@@ -1139,15 +1222,15 @@ pingBtn.addEventListener('click', async () => {
         ].filter(Boolean).join('\u2002\u00b7\u2002');
         setMsg(otaStatus, `Connected\u2014 ${parts || 'device online'}`, 'success');
     } catch (e) {
-        setMsg(otaStatus, `Could not reach device: ${e.message}`, 'error');
+        setMsg(otaStatus, `Could not reach device: ${describeFetchError(e, target)}`, 'error');
     } finally {
         pingBtn.disabled = false;
     }
 });
 
 otaBtn.addEventListener('click', async () => {
-    const ip = getIp();
-    if (!ip) { setMsg(otaStatus, 'Enter a device IP address.', 'error'); return; }
+    const target = normalizeDeviceAddress(getIp());
+    if (!target) { setMsg(otaStatus, 'Enter a valid device IP address or hostname.', 'error'); return; }
     let file = fileInput.files[0] || null;
     if (!file) {
         const firmwarePath = `https://spiritwrestler.ca/plants/firmware/${activeDevice}/firmware.bin`;
@@ -1172,7 +1255,7 @@ otaBtn.addEventListener('click', async () => {
     const form = new FormData();
     form.append('firmware', file);
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `http://${ip}/api/system/ota`);
+    xhr.open('POST', `${target.origin}/api/system/ota`);
     xhr.timeout = 120_000;
     xhr.upload.onprogress = (e) => {
         if (!e.lengthComputable) return;
@@ -1191,7 +1274,7 @@ otaBtn.addEventListener('click', async () => {
     };
     xhr.onerror = () => {
         setProgress(-1);
-        setMsg(otaStatus, 'Connection closed \u2014 the device may have rebooted after flashing. Wait a few seconds, then use Check Connection to confirm.', 'warning');
+        setMsg(otaStatus, describeXhrFailure(target), 'warning');
         otaBtn.disabled  = false;
         pingBtn.disabled = false;
     };
