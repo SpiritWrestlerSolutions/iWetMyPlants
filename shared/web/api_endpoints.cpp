@@ -272,7 +272,10 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            handlePostConfigSection(request, "relays", data, len);
+            // Only process when we have all the data
+            if (index + len == total) {
+                handlePostConfigSection(request, "relays", data, len);
+            }
         }
     );
 
@@ -592,7 +595,17 @@ void ApiEndpoints::handlePostConfigSection(AsyncWebServerRequest* request, const
         success = parseSensorConfig(arr);
         LOG_D(TAG, "parseSensorConfig returned: %s", success ? "true" : "false");
     } else if (section == "relays") {
+        if (!doc.is<JsonArray>()) {
+            LOG_E(TAG, "Error: relays data is not an array");
+            sendError(request, 400, "Expected array for relays");
+            return;
+        }
         JsonArray arr = doc.as<JsonArray>();
+        if (arr.size() == 0) {
+            LOG_E(TAG, "Error: relays array is empty");
+            sendError(request, 400, "Empty relays array");
+            return;
+        }
         success = parseRelayConfig(arr);
     } else if (section == "espnow") {
         auto& config = Config.getConfigMutable();

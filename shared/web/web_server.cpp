@@ -269,7 +269,8 @@ static void sendHtmlNoCache(AsyncWebServerRequest* request, const char* html) {
 void WebServer::registerStaticRoutes() {
     // Register more specific routes FIRST (important for route matching)
 
-    // Settings sub-pages (register before /settings)
+    // Settings sub-pages (register before /settings — AsyncWebServer prefix-matches
+    // "/settings" against "/settings/*", so sub-pages must be registered first)
     _server->on("/settings/wifi", HTTP_GET, [](AsyncWebServerRequest* request) {
         LOG_D(TAG, "GET /settings/wifi");
         sendHtmlNoCache(request, getWifiSettingsHtml());
@@ -278,6 +279,11 @@ void WebServer::registerStaticRoutes() {
     _server->on("/settings/mqtt", HTTP_GET, [](AsyncWebServerRequest* request) {
         LOG_D(TAG, "GET /settings/mqtt");
         sendHtmlNoCache(request, getMqttSettingsHtml());
+    });
+
+    _server->on("/settings/hardware", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        LOG_D(TAG, "GET /settings/hardware");
+        sendHtmlNoCache(request, getGreenhouseHardwareSettingsHtml());
     });
 
     // Sensors sub-pages (register before /sensors)
@@ -303,11 +309,6 @@ void WebServer::registerStaticRoutes() {
         } else {
             sendHtmlNoCache(request, getSettingsHtml());
         }
-    });
-
-    _server->on("/settings/hardware", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        LOG_D(TAG, "GET /settings/hardware");
-        sendHtmlNoCache(request, getGreenhouseHardwareSettingsHtml());
     });
 
     _server->on("/sensors", HTTP_GET, [this](AsyncWebServerRequest* request) {

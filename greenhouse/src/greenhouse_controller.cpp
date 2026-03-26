@@ -95,6 +95,46 @@ void GreenhouseController::handleBootState() {
 void GreenhouseController::handleLoadConfigState() {
     LOG_I(TAG, "Loading configuration");
 
+    // Initialize Improv WiFi Serial provisioning once at boot so the
+    // web installer can configure WiFi even if the device reconnects to
+    // a saved network and never enters AP mode.
+    if (!_improvStarted) {
+        _improvStarted = true;
+        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
+            WiFiMgr.stopCaptivePortal();
+
+            // Keep the WiFi driver alive by switching to AP+STA instead of
+            // tearing down AP first â€” avoids the C3 hang from WiFi.disconnect()
+            // on an uninitialised driver.
+            WiFi.mode(WIFI_AP_STA);
+            WiFi.begin(ssid, pwd);
+
+            uint32_t t = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
+                Watchdog.feed();
+                delay(100);
+            }
+
+            if (WiFi.status() != WL_CONNECTED) {
+                // Restore AP so user can still configure via captive portal
+                char ap_ssid[32];
+                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-GH-%s", Config.getDeviceId() + 6);
+                WiFi.mode(WIFI_AP);
+                WiFiMgr.startAP(ap_ssid);
+                WiFiMgr.startCaptivePortal();
+                return false;
+            }
+
+            outUrl = "http://" + WiFi.localIP().toString();
+            Config.setWifiCredentials(ssid, pwd);
+            Config.save();
+            return true;
+        });
+        _improv.begin(Serial);
+        _improv.setDeviceInfo("iWetMyPlants Greenhouse", IWMP_VERSION, "ESP32",
+                              Config.getDeviceId());
+    }
+
     const auto& wifi_cfg = Config.getWifi();
 
     // Check if we have WiFi credentials
@@ -154,6 +194,10 @@ void GreenhouseController::handleWifiConnectState() {
         }
         return;
     }
+
+    // Keep Improv responsive while awaiting WiFi â€” ensures the installer
+    // can detect the device and (re-)provision even if credentials fail.
+    _improv.loop();
 
     // Check timeout
     if ((millis() - _state_enter_time) > WIFI_CONNECT_TIMEOUT_MS) {
@@ -218,6 +262,9 @@ void GreenhouseController::handleMqttConnectState() {
         return;
     }
 
+    // Keep Improv responsive during MQTT connection wait
+    _improv.loop();
+
     // Check timeout
     if ((millis() - _state_enter_time) > MQTT_CONNECT_TIMEOUT_MS) {
         LOG_W(TAG, "MQTT connection timeout, continuing without MQTT");
@@ -249,54 +296,24 @@ void GreenhouseController::handleApModeState() {
         ap_started = true;
     }
 
-    // Start Improv WiFi Serial provisioning (once, on first AP_MODE entry)
-    if (!_improvStarted) {
-        _improvStarted = true;
-        _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
-            WiFiMgr.stopCaptivePortal();
-            WiFiMgr.stopAP();
-            WiFi.mode(WIFI_STA);
-            WiFi.begin(ssid, pwd);
-
-            uint32_t t = millis();
-            while (WiFi.status() != WL_CONNECTED && millis() - t < 20000) {
-                Watchdog.feed();
-                delay(100);
-            }
-
-            if (WiFi.status() != WL_CONNECTED) {
-                // Restore AP so user can still configure via captive portal
-                char ap_ssid[32];
-                snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-GH-%s", Config.getDeviceId() + 6);
-                WiFiMgr.startAP(ap_ssid);
-                WiFiMgr.startCaptivePortal();
-                return false;
-            }
-
-            outUrl = "http://" + WiFi.localIP().toString();
-            Config.setWifiCredentials(ssid, pwd);
-            Config.save();
-            return true;
-        });
-        _improv.begin(Serial);
-    }
-
+    // Improv is already initialized at boot (see handleLoadConfigState)
+    // Process WiFi (captive portal DNS) and Improv serial
     WiFiMgr.loop();
     _improv.loop();
 
     // Still update relays even in AP mode
     _relays.update();
 
-    // Improv provisioning succeeded — drain TX then reboot
-    if (_improv.isProvisioned()) {
-        LOG_I(TAG, "Improv provisioning complete — rebooting");
+    // Improv provisioning succeeded -- drain TX then reboot
+    if (_improv.wasReProvisioned()) {
+        LOG_I(TAG, "Improv provisioning complete -- rebooting");
         delay(1500);
         ESP.restart();
     }
 
     // Captive portal path: user configured WiFi via the web UI
     const auto& wifi_cfg = Config.getWifi();
-    if (strlen(wifi_cfg.ssid) > 0 && !_improv.isProvisioned()) {
+    if (strlen(wifi_cfg.ssid) > 0 && !_improv.wasReProvisioned()) {
         LOG_I(TAG, "WiFi configured, transitioning...");
         ap_started = false;
         WiFiMgr.stopCaptivePortal();
@@ -306,6 +323,14 @@ void GreenhouseController::handleApModeState() {
 }
 
 void GreenhouseController::handleOperationalState() {
+    static bool operational_init = false;
+
+    if (!operational_init) {
+        operational_init = true;
+        // Notify the installer browser that the device is already connected
+        _improv.broadcastProvisioned("http://" + WiFiMgr.getIP().toString());
+    }
+
     uint32_t now = millis();
 
     // Update web server (OTA reboot, calibration WebSocket)
@@ -350,6 +375,14 @@ void GreenhouseController::handleOperationalState() {
     if ((now - _last_publish_time) >= Config.getMqtt().publish_interval_sec * 1000) {
         _last_publish_time = now;
         publishState();
+    }
+
+    // Improv WiFi Serial -- allow browser to re-provision even when already connected
+    _improv.loop();
+    if (_improv.wasReProvisioned()) {
+        LOG_I(TAG, "Improv re-provisioning complete -- rebooting");
+        delay(1500);
+        ESP.restart();
     }
 }
 
