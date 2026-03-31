@@ -333,6 +333,11 @@ void GreenhouseController::handleOperationalState() {
 
     uint32_t now = millis();
 
+    // Drive WiFi auto-reconnect (setAutoReconnect(false) means this is the
+    // only reconnect mechanism — missing this call = permanent disconnect
+    // after the first router drop/channel-switch/DHCP expiry).
+    WiFiMgr.loop();
+
     // Update web server (OTA reboot, calibration WebSocket)
     if (Web.isRunning()) {
         Web.update();

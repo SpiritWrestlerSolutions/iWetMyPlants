@@ -103,6 +103,12 @@ void WebServer::update() {
 
     // Update rapid read for calibration WebSocket
     RapidRead.update();
+
+    // Clean up stale WebSocket clients — without this, disconnected clients
+    // accumulate in the AsyncWebSocket client list and leak memory over time.
+    if (_ws) {
+        _ws->cleanupClients();
+    }
 }
 
 void WebServer::end() {
@@ -165,15 +171,12 @@ void WebServer::sendRapidReading(uint8_t sensor_index, uint16_t raw, uint16_t av
         return;
     }
 
-    JsonDocument doc;
-    doc["type"] = "reading";
-    doc["sensor"] = sensor_index;
-    doc["raw"] = raw;
-    doc["avg"] = avg;
-    doc["percent"] = percent;
-    doc["timestamp"] = millis();
-
-    broadcastWsJson(doc);
+    // Stack buffer — no heap allocation on this hot path
+    char buf[96];
+    snprintf(buf, sizeof(buf),
+             "{\"type\":\"reading\",\"sensor\":%u,\"raw\":%u,\"avg\":%u,\"percent\":%u,\"timestamp\":%lu}",
+             sensor_index, raw, avg, percent, (unsigned long)millis());
+    _ws->textAll(buf);
 }
 
 void WebServer::sendJson(AsyncWebServerRequest* request, int code, const JsonDocument& doc) {
