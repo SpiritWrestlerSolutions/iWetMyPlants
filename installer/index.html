@@ -868,6 +868,25 @@
         <div class="status-msg" id="ota-status"></div>
     </div>
 
+    <div class="section-divider">or download the firmware file</div>
+
+    <div class="card">
+        <h2>Download Firmware</h2>
+        <p>Download the latest pre-built <code>.bin</code> file for your device. Use these with the OTA updater above, or flash manually with <a href="https://espressif.github.io/esptool-js/" target="_blank" rel="noopener">esptool-js</a>.</p>
+        <div class="btn-row" style="flex-wrap:wrap; gap:0.6rem; margin-top:1rem;">
+            <a class="btn btn-outline" id="dl-hub"
+               href="https://spiritwrestler.ca/plants/firmware/hub/firmware.bin"
+               download="iwmp-hub-firmware.bin">Hub firmware.bin</a>
+            <a class="btn btn-outline" id="dl-remote"
+               href="https://spiritwrestler.ca/plants/firmware/remote/firmware.bin"
+               download="iwmp-remote-firmware.bin">Remote firmware.bin</a>
+            <a class="btn btn-outline" id="dl-greenhouse"
+               href="https://spiritwrestler.ca/plants/firmware/greenhouse/firmware.bin"
+               download="iwmp-greenhouse-firmware.bin">Greenhouse firmware.bin</a>
+        </div>
+        <div class="helper-text" style="margin-top:0.75rem;">These are always the latest build from the <code>main</code> branch — the same files the OTA updater uses when no file is selected.</div>
+    </div>
+
 </main>
 </div>
 
