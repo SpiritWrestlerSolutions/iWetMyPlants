@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting Guide
+    url: https://spiritwrestler.ca/plants/documentation/troubleshooting.html
+    about: Check here first — common issues are documented with solutions
+  - name: Quick feedback / bug report (no GitHub account needed)
+    url: https://spiritwrestler.ca/plants
+    about: Use the Feedback button on the installer page to send a report directly
+  - name: Support on Ko-fi
+    url: https://ko-fi.com/iwetmyplants
+    about: If iWetMyPlants has been useful to you, consider buying me a coffee

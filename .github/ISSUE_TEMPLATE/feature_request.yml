@@ -1,0 +1,63 @@
+name: Feature Request
+description: Suggest something that would make iWetMyPlants better
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are welcome. The more clearly you can describe the problem you're trying to solve, the easier it is to evaluate the idea.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation where you ran into a limitation. "I want X" is less useful than "When I do Y, I can't accomplish Z because..."
+      placeholder: "When I have plants in a room without WiFi coverage, the Remote can't connect to the Hub because it relies on the home WiFi network..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would the solution look like?
+      description: Describe the behaviour you'd like to see. Be as specific as you can.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: Which device(s) would this affect?
+      multiple: true
+      options:
+        - Hub
+        - Remote
+        - Greenhouse
+        - Web installer
+        - Documentation
+        - All / general
+    validations:
+      required: false
+
+  - type: dropdown
+    id: willing-to-help
+    attributes:
+      label: Are you willing to help implement this?
+      description: No pressure either way — this is just useful to know.
+      options:
+        - "Yes, I can write code"
+        - "Yes, I can test hardware"
+        - "Yes, I can help with documentation"
+        - "Not at this time, but I could in future"
+        - "No, just suggesting"
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Have you found any workarounds, or are there other ways this could be solved?
+    validations:
+      required: false

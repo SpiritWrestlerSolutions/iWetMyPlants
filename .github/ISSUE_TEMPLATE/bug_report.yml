@@ -1,0 +1,74 @@
+name: Bug Report
+description: Something isn't working — let's figure it out
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. The more detail you can provide, the faster this gets resolved.
+
+        Before you start: check the [Troubleshooting Guide](https://spiritwrestler.ca/plants/documentation/troubleshooting.html) — your issue may already be documented there.
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: Which device is affected?
+      options:
+        - Hub
+        - Remote (sensor node)
+        - Greenhouse
+        - Web installer / flasher
+        - Documentation
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: firmware-version
+    attributes:
+      label: Firmware version
+      description: Shown in the header of the installer page, or in the Hub's web interface under Settings.
+      placeholder: "e.g. v1.0.2"
+    validations:
+      required: false
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Which ESP32 board(s) are you using? Which sensors?
+      placeholder: "e.g. ESP32 WROOM-32 dev board, HILETGO capacitive moisture sensors"
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem. What did you do, what did you expect, what actually occurred?
+      placeholder: |
+        1. I flashed the Hub firmware using the web installer
+        2. Entered my WiFi credentials when prompted
+        3. The Hub appeared to connect but never showed up in Home Assistant
+        4. Expected: auto-discovery in MQTT within a few minutes
+        5. Actual: nothing appears, Hub's web UI shows MQTT status as "Disconnected"
+    validations:
+      required: true
+
+  - type: textarea
+    id: serial-output
+    attributes:
+      label: Serial output (if available)
+      description: If you can connect via USB and open a serial monitor (115200 baud), paste any relevant output here. This is the single most useful piece of debugging information.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else?
+      description: Browser and OS (for installer issues), Home Assistant version (for HA issues), anything else that might be relevant.
+    validations:
+      required: false
