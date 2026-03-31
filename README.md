@@ -9,7 +9,7 @@
 
 ---
 
-![iWetMyPlants Banner](docs/banner.webp)
+![iWetMyPlants Banner](docs/IWMP_banner.webp)
 
 A complete, self-hosted plant monitoring network built around the ESP32. Monitor soil moisture, automate watering, and integrate with Home Assistant — all with hardware you can source for **under $20**.
 
