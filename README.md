@@ -26,7 +26,7 @@ The system has three device roles:
 | Device | Role | Hardware | Power |
 |--------|------|----------|-------|
 | **Hub** | Central coordinator, MQTT/HA bridge | ESP32 WROOM or S3 | Mains |
-| **Remote** | Battery-powered single-sensor node | ESP32-C3 SuperMini | Battery |
+| **Remote** | Single-sensor node | ESP32-C3 SuperMini | Battery or Mains |
 | **Greenhouse** | Multi-sensor + relay controller | ESP32 WROOM or S3 | Mains |
 
 Remotes communicate with the Hub over **ESP-NOW** — a fast, low-power protocol that works independently of your WiFi router. The Hub bridges everything to **MQTT** and **Home Assistant** via auto-discovery.
@@ -44,6 +44,7 @@ Remotes communicate with the Hub over **ESP-NOW** — a fast, low-power protocol
 - **OTA updates** — update firmware over-the-air from the installer page
 - **Under $20** for a full 8-sensor hub setup
 - **Fully open source** — GPL v3, no proprietary components
+- **No Cloud Servers or 3rd party data handling** - can run without internet connection
 
 ---
 
@@ -66,13 +67,13 @@ The fastest path to running hardware:
 ### Hub / Greenhouse
 - ESP32 WROOM-32 or ESP32-S3 development board
 - USB cable (for initial flashing)
-- Capacitive soil moisture sensor(s) — e.g., [this type](docs/images/sensor-capacitive.jpg)
+- Capacitive soil moisture sensor(s) — e.g., [this type](docs/images/sensor-capacitive.webp)
 - 5V power supply (after initial setup)
 
 ### Remote
 - ESP32-C3 SuperMini
 - 1× capacitive soil moisture sensor
-- 3.7V LiPo battery (1000–2000 mAh recommended)
+- Optional 3.7V LiPo battery (1000–2000 mAh recommended)
 - USB-C cable (for initial flashing)
 
 ### Sensors
