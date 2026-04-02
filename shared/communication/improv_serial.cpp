@@ -37,16 +37,23 @@ void ImprovSerial::begin(Stream& serial) {
     _state        = State::AUTHORIZED;
     _rxLen        = 0;
     _lastBroadcast = 0;
-    // Discard any bytes already in the RX FIFO (e.g. boot-time garbage)
-    while (_serial->available()) _serial->read();
-    LOG_I(TAG, "Improv WiFi Serial ready — waiting for browser");
+    // Do NOT drain the RX FIFO here.  The browser sends CMD_GET_DEVICE_INFO
+    // immediately after the hard-reset; discarding those bytes causes the
+    // browser to time out waiting for a response and show "Unknown Error".
+    // Our parser handles garbage gracefully (scans for IMPROV magic header).
+    LOG_I(TAG, "Improv WiFi Serial ready \u2014 waiting for browser");
 }
 
 void ImprovSerial::loop() {
     if (!_serial) return;
 
-    // Broadcast current state every second so esp-web-tools can detect us
+    // Broadcast current state every second so esp-web-tools can detect us.
+    // When already PROVISIONED, also re-send the RPC_RESULT with the URL so
+    // the browser shows "Open Device" even if it missed the initial broadcast.
     if (millis() - _lastBroadcast >= BROADCAST_INTERVAL_MS) {
+        if (_state == State::PROVISIONED && _provisioned_url.length() > 0) {
+            sendRpcResult(_provisioned_url);
+        }
         sendCurrentState(_state);
         _lastBroadcast = millis();
     }
@@ -136,7 +143,8 @@ void ImprovSerial::parseBuffer() {
 
 void ImprovSerial::handleRpcCommand(const uint8_t* data, uint8_t len) {
     if (len < 1) {
-        sendError(Error::INVALID_RPC);
+        // Silent drop: sending INVALID_RPC permanently aborts the browser
+        // dialog. Same reasoning as the checksum-mismatch silent-drop above.
         return;
     }
     if (data[0] == CMD_WIFI_SETTINGS) {
@@ -277,9 +285,10 @@ void ImprovSerial::sendPacket(uint8_t type, const uint8_t* data, uint8_t len) {
 
 void ImprovSerial::broadcastProvisioned(const String& url) {
     if (!_serial) return;
-    // Tell the browser the device is already connected with its URL.
-    // Does NOT set _reProvisioned � wasReProvisioned() only fires when
-    // the user actively submits new credentials via the browser dialog.
+    // Store URL so loop() can re-broadcast it every second alongside
+    // CURRENT_STATE=PROVISIONED, ensuring the browser gets it even if
+    // it missed the first packet or was not yet listening.
+    _provisioned_url = url;
     sendRpcResult(url);
     sendCurrentState(State::PROVISIONED);
 }

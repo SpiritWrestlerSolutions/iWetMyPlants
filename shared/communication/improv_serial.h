@@ -57,7 +57,7 @@ public:
 
     /**
      * Announce to the installer browser that the device is already connected.
-     * Does NOT set wasReProvisioned() — that only fires when the user submits
+     * Does NOT set wasReProvisioned() ï¿½ that only fires when the user submits
      * new credentials via the browser dialog.
      */
     void broadcastProvisioned(const String& url);
@@ -86,6 +86,7 @@ private:
     uint8_t   _rxBuf[256]   = {};
     uint16_t  _rxLen         = 0;
     bool      _reProvisioned = false;
+    String    _provisioned_url;
 
     // Device info for CMD_GET_DEVICE_INFO responses
     char _fw_name[32]    = "iWetMyPlants";
