@@ -228,8 +228,13 @@ void HubController::handleMqttConnectState() {
                 if (Config.getMqtt().ha_discovery_enabled) {
                     Mqtt.publishDiscovery();
                     for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+                        const auto& scfg = Config.getMoistureSensor(i);
                         char name[32];
-                        snprintf(name, sizeof(name), "Plant %d Moisture", i + 1);
+                        if (scfg.sensor_name[0] != '\0') {
+                            strlcpy(name, scfg.sensor_name, sizeof(name));
+                        } else {
+                            snprintf(name, sizeof(name), "Plant %d", i + 1);
+                        }
                         Mqtt.publishMoistureDiscovery(i, name);
                     }
                     Mqtt.publishTemperatureDiscovery();
