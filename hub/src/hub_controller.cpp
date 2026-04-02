@@ -229,6 +229,7 @@ void HubController::handleMqttConnectState() {
                     Mqtt.publishDiscovery();
                     for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
                         const auto& scfg = Config.getMoistureSensor(i);
+                        if (!scfg.enabled) continue;
                         char name[32];
                         if (scfg.sensor_name[0] != '\0') {
                             strlcpy(name, scfg.sensor_name, sizeof(name));
