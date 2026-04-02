@@ -45,7 +45,7 @@ struct SensorReadings {
         uint16_t raw_value = 0;
         uint8_t percent = 0;
     };
-    MoistureReading moisture[8];
+    MoistureReading moisture[IWMP_MAX_SENSORS];
     uint8_t moisture_count = 0;
 
     // Environmental

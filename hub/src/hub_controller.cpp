@@ -227,6 +227,13 @@ void HubController::handleMqttConnectState() {
                 // Publish discovery after connection
                 if (Config.getMqtt().ha_discovery_enabled) {
                     Mqtt.publishDiscovery();
+                    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+                        char name[32];
+                        snprintf(name, sizeof(name), "Plant %d Moisture", i + 1);
+                        Mqtt.publishMoistureDiscovery(i, name);
+                    }
+                    Mqtt.publishTemperatureDiscovery();
+                    Mqtt.publishHumidityDiscovery();
                 }
                 Mqtt.publishAvailability(true);
             });
@@ -538,9 +545,21 @@ void HubController::publishAggregatedState() {
     readings.rssi = WiFiMgr.getRSSI();
     readings.free_heap = ESP.getFreeHeap();
 
-    // Aggregate readings from all devices
-    // For now just publish the hub's own state
-    // In a full implementation, we'd aggregate from all registered devices
+    // Populate local moisture sensor readings from cache.
+    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+        if (_sensor_cache[i].valid) {
+            readings.moisture[readings.moisture_count].valid     = true;
+            readings.moisture[readings.moisture_count].index     = i;
+            readings.moisture[readings.moisture_count].raw_value = _sensor_cache[i].raw;
+            readings.moisture[readings.moisture_count].percent   = _sensor_cache[i].percent;
+            readings.moisture_count++;
+        }
+    }
+
+    // NOTE: Hub has no local environmental sensor cache — temperature/humidity
+    // are only available from paired remote devices via the device registry.
+    // has_environmental remains false; env data is published per-reading via
+    // onEnvironmentalReading() -> publishEnvironmentalReading() as messages arrive.
 
     Mqtt.publishState(readings);
 }
