@@ -224,6 +224,27 @@ void GreenhouseController::handleMqttConnectState() {
                 LOG_I(TAG, "MQTT connected (session=%d)", session_present);
                 if (Config.getMqtt().ha_discovery_enabled) {
                     Mqtt.publishDiscovery();
+                    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
+                        const auto& scfg = Config.getMoistureSensor(i);
+                        if (!scfg.enabled) continue;
+                        char name[32];
+                        if (scfg.sensor_name[0] != '\0') {
+                            strlcpy(name, scfg.sensor_name, sizeof(name));
+                        } else {
+                            snprintf(name, sizeof(name), "Plant %d", i + 1);
+                        }
+                        Mqtt.publishMoistureDiscovery(i, name);
+                    }
+                    const auto& env_cfg = Config.getEnvSensor();
+                    if (env_cfg.sensor_type != EnvSensorType::NONE) {
+                        Mqtt.publishTemperatureDiscovery();
+                        Mqtt.publishHumidityDiscovery();
+                    }
+                    for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
+                        const auto& rcfg = Config.getRelay(i);
+                        if (!rcfg.enabled) continue;
+                        Mqtt.publishRelayDiscovery(i, rcfg.relay_name);
+                    }
                 }
                 Mqtt.publishAvailability(true);
             });
