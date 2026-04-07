@@ -65,7 +65,7 @@ struct SensorReadings {
         uint8_t index = 0;
         bool state = false;
     };
-    RelayState relays[4];
+    RelayState relays[IWMP_MAX_RELAYS];
     uint8_t relay_count = 0;
 
     // System info
@@ -152,6 +152,11 @@ public:
      * @brief Remove all HA discovery configs (for clean unpair)
      */
     void removeDiscovery();
+
+    void removeMoistureDiscovery(uint8_t sensor_index);
+    void removeTemperatureDiscovery();
+    void removeHumidityDiscovery();
+    void removeRelayDiscovery(uint8_t relay_index);
 
     /**
      * @brief Publish discovery for moisture sensor
@@ -329,7 +334,7 @@ private:
     void buildTopics();
     void setupLWT();
     void subscribeToCommands();
-    void handleRelayCommand(const char* payload, size_t len);
+    void handleRelayCommand(const String& topic, const char* payload, size_t len);
     const char* getModelName() const;
     String getUniqueId(const char* entity) const;
 };

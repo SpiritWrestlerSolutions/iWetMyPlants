@@ -18,6 +18,8 @@
 #include <functional>
 #include <vector>
 #include <deque>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include "message_types.h"
 
 namespace iwmp {
@@ -358,6 +360,9 @@ private:
         uint32_t received_time;
     };
     std::deque<RecentMessage> _recent_messages;
+
+    // Mutex to protect collections across FreeRTOS tasks
+    SemaphoreHandle_t _mutex = nullptr;
 
     // Internal methods
     bool isDuplicate(const uint8_t* mac, uint8_t sequence);

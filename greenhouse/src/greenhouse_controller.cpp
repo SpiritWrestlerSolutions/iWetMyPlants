@@ -8,7 +8,7 @@
 #include "logger.h"
 #include "watchdog.h"
 #include "web_server.h"
-#include "rapid_read.h"
+#include "calibration_manager.h"
 #include "api_endpoints.h"
 
 namespace iwmp {
@@ -125,6 +125,18 @@ void GreenhouseController::handleLoadConfigState() {
                 return false;
             }
 
+            // Connected — now drop the AP cleanly (softAPdisconnect false keeps
+            // the WiFi driver running in STA mode)
+            WiFi.softAPdisconnect(false);
+            WiFi.mode(WIFI_STA);
+
+            // Wait for DHCP to assign an IP so we don't send an invalid URL
+            uint32_t t2 = millis();
+            while ((uint32_t)WiFi.localIP() == 0 && millis() - t2 < 5000) {
+                Watchdog.feed();
+                delay(100);
+            }
+
             outUrl = "http://" + WiFi.localIP().toString();
             Config.setWifiCredentials(ssid, pwd);
             Config.save();
@@ -226,7 +238,10 @@ void GreenhouseController::handleMqttConnectState() {
                     Mqtt.publishDiscovery();
                     for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
                         const auto& scfg = Config.getMoistureSensor(i);
-                        if (!scfg.enabled) continue;
+                        if (!scfg.enabled) {
+                            Mqtt.removeMoistureDiscovery(i);
+                            continue;
+                        }
                         char name[32];
                         if (scfg.sensor_name[0] != '\0') {
                             strlcpy(name, scfg.sensor_name, sizeof(name));
@@ -239,10 +254,16 @@ void GreenhouseController::handleMqttConnectState() {
                     if (env_cfg.sensor_type != EnvSensorType::NONE) {
                         Mqtt.publishTemperatureDiscovery();
                         Mqtt.publishHumidityDiscovery();
+                    } else {
+                        Mqtt.removeTemperatureDiscovery();
+                        Mqtt.removeHumidityDiscovery();
                     }
                     for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
                         const auto& rcfg = Config.getRelay(i);
-                        if (!rcfg.enabled) continue;
+                        if (!rcfg.enabled) {
+                            Mqtt.removeRelayDiscovery(i);
+                            continue;
+                        }
                         Mqtt.publishRelayDiscovery(i, rcfg.relay_name);
                     }
                 }
@@ -322,24 +343,27 @@ void GreenhouseController::handleApModeState() {
     WiFiMgr.loop();
     _improv.loop();
 
-    // Still update relays even in AP mode
+    if (Web.isRunning()) {
+        Web.update();
+    }
+    Calibration.update();
+
+    // Keep life-support systems running offline
     _relays.update();
+    _automation.update();
+
+    uint32_t now = millis();
+    if ((now - _last_sensor_read_time) >= SENSOR_READ_INTERVAL_MS) {
+        _last_sensor_read_time = now;
+        readSensors();
+        readEnvSensor();
+    }
 
     // Improv provisioning succeeded -- drain TX then reboot
     if (_improv.wasReProvisioned()) {
         LOG_I(TAG, "Improv provisioning complete -- rebooting");
         delay(1500);
         ESP.restart();
-    }
-
-    // Captive portal path: user configured WiFi via the web UI
-    const auto& wifi_cfg = Config.getWifi();
-    if (strlen(wifi_cfg.ssid) > 0 && !_improv.wasReProvisioned()) {
-        LOG_I(TAG, "WiFi configured, transitioning...");
-        ap_started = false;
-        WiFiMgr.stopCaptivePortal();
-        WiFiMgr.stopAP();
-        enterState(GreenhouseState::WIFI_CONNECT);
     }
 }
 
@@ -369,6 +393,8 @@ void GreenhouseController::handleOperationalState() {
 
     // Update automation engine
     _automation.update();
+    
+    Calibration.update();
 
     // Update MQTT
     if (Mqtt.isInitialized()) {
@@ -589,14 +615,6 @@ void GreenhouseController::publishState() {
 }
 
 void GreenhouseController::setupWebRoutes() {
-    // Set first available sensor for RapidRead calibration
-    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
-        if (_moisture_sensors[i]) {
-            RapidRead.setSensor(_moisture_sensors[i].get());
-            break;
-        }
-    }
-
     // Register sensor data callback for API
     ApiEndpoints::onSensorData([this](uint8_t index, uint16_t& raw, uint8_t& percent) -> bool {
         if (index < IWMP_MAX_SENSORS && _moisture_sensors[index]) {
@@ -607,30 +625,50 @@ void GreenhouseController::setupWebRoutes() {
         return false;
     });
 
-    // Register calibration callback
-    ApiEndpoints::onCalibration([this](uint8_t sensor_idx, const char* action) -> bool {
-        if (sensor_idx < IWMP_MAX_SENSORS && _moisture_sensors[sensor_idx]) {
-            // Switch RapidRead to this sensor
-            RapidRead.setSensor(_moisture_sensors[sensor_idx].get());
-
-            if (strcmp(action, "dry") == 0) {
-                _moisture_sensors[sensor_idx]->calibrateDry();
-                auto& cfg = Config.getConfigMutable();
-                cfg.moisture_sensors[sensor_idx].dry_value = _moisture_sensors[sensor_idx]->getDryValue();
-                Config.save();
-                LOG_I(TAG, "Sensor %d dry point set: %d", sensor_idx, _moisture_sensors[sensor_idx]->getDryValue());
-                return true;
-            } else if (strcmp(action, "wet") == 0) {
-                _moisture_sensors[sensor_idx]->calibrateWet();
-                auto& cfg = Config.getConfigMutable();
-                cfg.moisture_sensors[sensor_idx].wet_value = _moisture_sensors[sensor_idx]->getWetValue();
-                Config.save();
-                LOG_I(TAG, "Sensor %d wet point set: %d", sensor_idx, _moisture_sensors[sensor_idx]->getWetValue());
-                return true;
+    Web.addRouteWithBody("/api/calibration/start", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>() || !doc["point"].is<const char*>()) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
             }
-        }
-        return false;
+            uint8_t idx = doc["sensor"];
+            const char* point = doc["point"];
+            if (idx >= IWMP_MAX_SENSORS || !_moisture_sensors[idx]) {
+                request->send(400, "application/json", "{\"error\":\"Invalid sensor\"}");
+                return;
+            }
+            bool is_wet = (strcmp(point, "wet") == 0);
+            if (Calibration.begin(_moisture_sensors[idx].get(), is_wet)) {
+                request->send(200, "application/json", "{\"success\":true}");
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Calibration busy\"}");
+            }
+        });
+
+    Web.addRoute("/api/calibration/status", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "{\"state\":%d,\"progress\":%u,\"value\":%u,\"error\":\"%s\"}",
+                 (int)Calibration.getState(), Calibration.getProgress(), Calibration.getResult(),
+                 Calibration.getErrorMessage());
+        req->send(200, "application/json", buf);
     });
+
+    Web.addRouteWithBody("/api/calibration/save", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>()) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            if (Calibration.applyAndSave(doc["sensor"])) {
+                request->send(200, "application/json", "{\"success\":true}");
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Nothing to save\"}");
+            }
+        });
 
     // Register relay state callback
     ApiEndpoints::onRelayState([this](uint8_t index, bool& state) -> bool {

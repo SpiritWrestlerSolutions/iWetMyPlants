@@ -30,6 +30,10 @@ bool EspNowManager::begin(uint8_t channel) {
     s_instance = this;
     _channel = channel;
 
+    if (_mutex == nullptr) {
+        _mutex = xSemaphoreCreateMutex();
+    }
+
     // Get own MAC address (efuse read — safe before WiFi start)
     esp_read_mac(_own_mac, ESP_MAC_WIFI_STA);
 
@@ -464,8 +468,11 @@ bool EspNowManager::setPMK(const uint8_t* pmk) {
 // ============ Utility ============
 
 void EspNowManager::update() {
-    cleanupOldMessages();
-    cleanupPendingAcks();
+    if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        cleanupOldMessages();
+        cleanupPendingAcks();
+        xSemaphoreGive(_mutex);
+    }
 }
 
 uint8_t EspNowManager::getNextSequence() {
@@ -590,7 +597,9 @@ void EspNowManager::onDataSent(const uint8_t* mac, esp_now_send_status_t status)
 }
 
 void EspNowManager::onDataRecv(const uint8_t* mac, const uint8_t* data, int len) {
+    xSemaphoreTake(_mutex, portMAX_DELAY);
     if (len < (int)sizeof(MessageHeader)) {
+        xSemaphoreGive(_mutex);
         return;
     }
 
@@ -602,12 +611,14 @@ void EspNowManager::onDataRecv(const uint8_t* mac, const uint8_t* data, int len)
     if (header->protocol_version != PROTOCOL_VERSION) {
         LOG_W(TAG, "Protocol version mismatch: %d vs %d",
                       header->protocol_version, PROTOCOL_VERSION);
+        xSemaphoreGive(_mutex);
         return;
     }
 
     // Handle ACK messages specially
     if (header->type == MessageType::ACK) {
         processAck(mac, reinterpret_cast<const AckMsg*>(data));
+        xSemaphoreGive(_mutex);
         return;
     }
 
@@ -618,6 +629,7 @@ void EspNowManager::onDataRecv(const uint8_t* mac, const uint8_t* data, int len)
         if (header->flags & MsgFlags::REQUIRES_ACK) {
             sendAck(mac, header->sequence_number, header->type);
         }
+        xSemaphoreGive(_mutex);
         return;
     }
 
@@ -628,6 +640,8 @@ void EspNowManager::onDataRecv(const uint8_t* mac, const uint8_t* data, int len)
     if (header->flags & MsgFlags::REQUIRES_ACK) {
         sendAck(mac, header->sequence_number, header->type);
     }
+
+    xSemaphoreGive(_mutex);
 
     // Call raw receive callback
     if (_receive_callback) {

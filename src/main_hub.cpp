@@ -14,6 +14,7 @@
 #include "watchdog.h"
 #include "defaults.h"
 #include "ads1115_moisture.h"
+#include "version.h"
 
 using namespace iwmp;
 
@@ -24,7 +25,7 @@ void setup() {
     delay(100);
 
     LOG_I(TAG, "========================================");
-    LOG_I(TAG, "iWetMyPlants v%s - Hub", IWMP_VERSION);
+    LOG_I(TAG, "iWetMyPlants " IWMP_BUILD_LINE " - Hub");
     LOG_I(TAG, "========================================");
 
     // Initialize logger — DEBUG in dev builds, INFO in production

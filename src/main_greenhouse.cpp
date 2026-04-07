@@ -13,6 +13,7 @@
 #include "greenhouse_controller.h"
 #include "logger.h"
 #include "watchdog.h"
+#include "version.h"
 
 using namespace iwmp;
 
@@ -27,7 +28,7 @@ void setup() {
     Log.setTimestamps(true);
 
     LOG_I(TAG, "========================================");
-    LOG_I(TAG, "iWetMyPlants v%s - Greenhouse (t=%lums)", IWMP_VERSION, millis());
+    LOG_I(TAG, "iWetMyPlants " IWMP_BUILD_LINE " - Greenhouse (t=%lums)", millis());
     LOG_I(TAG, "========================================");
 
     // Initialize I2C for ADS1115 and other peripherals

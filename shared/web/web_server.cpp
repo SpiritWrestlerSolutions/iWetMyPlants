@@ -7,7 +7,6 @@
 #include "../utils/logger.h"
 #include "api_endpoints.h"
 #include "../utils/ota_manager.h"
-#include "../calibration/rapid_read.h"
 
 namespace iwmp {
 
@@ -97,9 +96,6 @@ bool WebServer::begin(const DeviceIdentity& identity) {
     // Initialize OTA manager
     Ota.begin(_server);
 
-    // Initialize rapid read WebSocket for calibration
-    RapidRead.begin(_server);
-
     // Start server
     _server->begin();
     _running = true;
@@ -115,9 +111,6 @@ void WebServer::update() {
 
     // Check for pending OTA reboot
     Ota.checkPendingReboot();
-
-    // Update rapid read for calibration WebSocket
-    RapidRead.update();
 
     // Clean up stale WebSocket clients — without this, disconnected clients
     // accumulate in the AsyncWebSocket client list and leak memory over time.

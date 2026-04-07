@@ -191,12 +191,6 @@ private:
     void savePollInterval(uint32_t interval_sec);
 
     /**
-     * @brief Select sensor for calibration
-     * @param index Sensor index
-     */
-    void selectSensorForCalibration(uint8_t index);
-
-    /**
      * @brief Check device timeouts
      */
     void checkDeviceTimeouts();

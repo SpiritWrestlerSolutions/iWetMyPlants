@@ -161,10 +161,10 @@ void ImprovSerial::handleRpcCommand(const uint8_t* data, uint8_t len) {
 
 void ImprovSerial::handleWifiSettings(const uint8_t* data, uint8_t len) {
     // Layout: [CMD_WIFI_SETTINGS][ssid_len][ssid...][pwd_len][pwd...]
-    if (len < 3) { sendError(Error::INVALID_RPC); return; }
+    if (len < 2) { sendError(Error::INVALID_RPC); return; }
 
     uint8_t ssid_len = data[1];
-    if (ssid_len == 0 || (uint16_t)2 + ssid_len + 1 > len) {
+    if (ssid_len == 0 || (uint16_t)2 + ssid_len > len) {
         sendError(Error::INVALID_RPC);
         return;
     }

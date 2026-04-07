@@ -83,7 +83,7 @@ private:
     State     _state         = State::AUTHORIZED;
     ConnectCb _connectCb;
     uint32_t  _lastBroadcast = 0;
-    uint8_t   _rxBuf[256]   = {};
+    uint8_t   _rxBuf[270]   = {};
     uint16_t  _rxLen         = 0;
     bool      _reProvisioned = false;
     String    _provisioned_url;

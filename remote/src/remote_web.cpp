@@ -411,11 +411,11 @@ void RemoteWeb::registerRoutes() {
 
     _server->on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
         LOG_I(TAG, "GET / from %s", request->client()->remoteIP().toString().c_str());
-        request->send(200, "text/html", REMOTE_STATUS_HTML);
+        request->send_P(200, "text/html", REMOTE_STATUS_HTML);
     });
 
     _server->on("/settings", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send(200, "text/html", REMOTE_SETTINGS_HTML);
+        request->send_P(200, "text/html", REMOTE_SETTINGS_HTML);
     });
 
     // ---- JSON API ----

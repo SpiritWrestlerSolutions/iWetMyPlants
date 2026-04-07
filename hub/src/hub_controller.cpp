@@ -8,7 +8,7 @@
 #include "logger.h"
 #include "api_endpoints.h"
 #include "web_server.h"
-#include "rapid_read.h"
+#include "calibration_manager.h"
 #include "sensor_interface.h"
 #include "mux_moisture.h"
 #include <Wire.h>
@@ -129,6 +129,13 @@ void HubController::handleLoadConfigState() {
             WiFi.softAPdisconnect(false);
             WiFi.mode(WIFI_STA);
 
+            // Wait for DHCP to assign an IP so we don't send an invalid URL
+            uint32_t t2 = millis();
+            while ((uint32_t)WiFi.localIP() == 0 && millis() - t2 < 5000) {
+                Watchdog.feed();
+                delay(100);
+            }
+
             outUrl = "http://" + WiFi.localIP().toString();
             Config.setWifiCredentials(ssid, pwd);
             Config.save();
@@ -229,7 +236,10 @@ void HubController::handleMqttConnectState() {
                     Mqtt.publishDiscovery();
                     for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
                         const auto& scfg = Config.getMoistureSensor(i);
-                        if (!scfg.enabled) continue;
+                        if (!scfg.enabled) {
+                            Mqtt.removeMoistureDiscovery(i);
+                            continue;
+                        }
                         char name[32];
                         if (scfg.sensor_name[0] != '\0') {
                             strlcpy(name, scfg.sensor_name, sizeof(name));
@@ -313,6 +323,11 @@ void HubController::handleApModeState() {
     WiFiMgr.loop();
     _improv.loop();
 
+    if (Web.isRunning()) {
+        Web.update();
+    }
+    Calibration.update();
+
     // Improv provisioning succeeded — drain TX then reboot into WIFI_CONNECT
     if (_improv.wasReProvisioned()) {
         LOG_I(TAG, "Improv provisioning complete — rebooting");
@@ -344,21 +359,13 @@ void HubController::handleOperationalState() {
 
     if (Mqtt.isInitialized()) {
         Mqtt.loop();
-
-        // Reconnect MQTT if disconnected
-        if (!Mqtt.isConnected() && WiFiMgr.isConnected()) {
-            static uint32_t last_mqtt_reconnect = 0;
-            if (millis() - last_mqtt_reconnect > 5000) {
-                LOG_I(TAG, "Attempting MQTT reconnect");
-                Mqtt.connect();
-                last_mqtt_reconnect = millis();
-            }
-        }
     }
 
     if (EspNow.isInitialized()) {
         EspNow.update();
     }
+
+    Calibration.update();
 
     // Background sensor polling (sequential, non-blocking)
     doBackgroundPoll();
@@ -777,22 +784,51 @@ void HubController::setupWebRoutes() {
         return true;
     });
 
-    // Register calibration callback for sensor selection
-    ApiEndpoints::onCalibration([this](uint8_t sensor_idx, const char* action) -> bool {
-        // Select sensor for calibration and handle calibration points
-        if (sensor_idx < IWMP_MAX_SENSORS && _local_sensors[sensor_idx]) {
-            RapidRead.setSensor(_local_sensors[sensor_idx].get());
-
-            if (strcmp(action, "dry") == 0) {
-                _local_sensors[sensor_idx]->calibrateDry();
-                return true;
-            } else if (strcmp(action, "wet") == 0) {
-                _local_sensors[sensor_idx]->calibrateWet();
-                return true;
+    // NEW CALIBRATION ENDPOINTS
+    Web.addRouteWithBody("/api/calibration/start", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>() || !doc["point"].is<const char*>()) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
             }
-        }
-        return false;
+            uint8_t idx = doc["sensor"];
+            const char* point = doc["point"];
+            if (idx >= IWMP_MAX_SENSORS || !_local_sensors[idx]) {
+                request->send(400, "application/json", "{\"error\":\"Invalid sensor\"}");
+                return;
+            }
+            bool is_wet = (strcmp(point, "wet") == 0);
+            if (Calibration.begin(_local_sensors[idx].get(), is_wet)) {
+                request->send(200, "application/json", "{\"success\":true}");
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Calibration busy\"}");
+            }
+        });
+
+    Web.addRoute("/api/calibration/status", HTTP_GET, [this](AsyncWebServerRequest* req) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "{\"state\":%d,\"progress\":%u,\"value\":%u,\"error\":\"%s\"}",
+                 (int)Calibration.getState(), Calibration.getProgress(), Calibration.getResult(),
+                 Calibration.getErrorMessage());
+        req->send(200, "application/json", buf);
     });
+
+    Web.addRouteWithBody("/api/calibration/save", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>()) {
+                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            if (Calibration.applyAndSave(doc["sensor"])) {
+                request->send(200, "application/json", "{\"success\":true}");
+            } else {
+                request->send(400, "application/json", "{\"error\":\"Nothing to save\"}");
+            }
+        });
 
     // POST /api/sensors/poll — force an immediate sensor reading cycle
     Web.addRoute("/api/sensors/poll", HTTP_POST, [this](AsyncWebServerRequest* request) {
@@ -905,11 +941,6 @@ void HubController::initializeLocalSensors() {
             _local_sensors[i]->begin();
             _local_sensor_count++;
             LOG_I(TAG, "Sensor %d initialized: %s", i, _local_sensors[i]->getName());
-
-            // Set the first enabled sensor for RapidRead calibration
-            if (_local_sensor_count == 1) {
-                RapidRead.setSensor(_local_sensors[i].get());
-            }
         } else {
             LOG_W(TAG, "Failed to create sensor %d", i);
         }
@@ -924,13 +955,6 @@ void HubController::initializeLocalSensors() {
     Wire1.setTimeOut(50);
 
     LOG_I(TAG, "Initialized %d local sensors", _local_sensor_count);
-}
-
-void HubController::selectSensorForCalibration(uint8_t index) {
-    if (index < IWMP_MAX_SENSORS && _local_sensors[index]) {
-        RapidRead.setSensor(_local_sensors[index].get());
-        LOG_I(TAG, "Selected sensor %d for calibration", index);
-    }
 }
 
 

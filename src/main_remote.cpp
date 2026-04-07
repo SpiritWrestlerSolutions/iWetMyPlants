@@ -15,6 +15,7 @@
 #include "defaults.h"
 #include "logger.h"
 #include "wifi_manager.h"
+#include "version.h"
 
 using namespace iwmp;
 
@@ -41,7 +42,7 @@ void setup() {
     Log.setTimestamps(true);
 
     LOG_I(TAG, "========================================");
-    LOG_I(TAG, "iWetMyPlants v%s - Remote (t=%lums)", IWMP_VERSION, millis());
+    LOG_I(TAG, "iWetMyPlants " IWMP_BUILD_LINE " - Remote (t=%lums)", millis());
     LOG_I(TAG, "========================================");
 
     // Initialize NVS (required for WiFi and Preferences)

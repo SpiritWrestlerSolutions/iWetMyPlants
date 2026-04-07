@@ -111,7 +111,9 @@ void MqttManager::updateConfig(const MqttConfig& config) {
     setupLWT();
 
     if (was_connected && _config.enabled) {
-        connect();
+        // Allow the loop() to cleanly handle reconnection 
+        // after the async socket finishes tearing down.
+        _last_reconnect_attempt = 0; 
     }
 }
 
@@ -186,8 +188,40 @@ void MqttManager::publishDiscovery() {
 }
 
 void MqttManager::removeDiscovery() {
-    // Publish empty payloads to remove discovery entries
-    // This is called when unpairing or resetting
+    // Remove the entities that publishDiscovery() registers directly.
+    // Per-device entities (moisture, relay, etc.) must be removed by the
+    // device controller via the individual remove* methods.
+    if (!isConnected() || !_config.ha_discovery_enabled) return;
+    String topic = getDiscoveryTopic("sensor", "rssi");
+    publish(topic.c_str(), "", true);
+}
+
+void MqttManager::removeMoistureDiscovery(uint8_t sensor_index) {
+    if (!isConnected() || !_config.ha_discovery_enabled) return;
+    char entity_id[32];
+    snprintf(entity_id, sizeof(entity_id), "moisture_%d", sensor_index + 1);
+    String topic = getDiscoveryTopic("sensor", entity_id);
+    publish(topic.c_str(), "", true);
+}
+
+void MqttManager::removeTemperatureDiscovery() {
+    if (!isConnected() || !_config.ha_discovery_enabled) return;
+    String topic = getDiscoveryTopic("sensor", "temperature");
+    publish(topic.c_str(), "", true);
+}
+
+void MqttManager::removeHumidityDiscovery() {
+    if (!isConnected() || !_config.ha_discovery_enabled) return;
+    String topic = getDiscoveryTopic("sensor", "humidity");
+    publish(topic.c_str(), "", true);
+}
+
+void MqttManager::removeRelayDiscovery(uint8_t relay_index) {
+    if (!isConnected() || !_config.ha_discovery_enabled) return;
+    char entity_id[32];
+    snprintf(entity_id, sizeof(entity_id), "relay_%d", relay_index + 1);
+    String topic = getDiscoveryTopic("switch", entity_id);
+    publish(topic.c_str(), "", true);
 }
 
 void MqttManager::publishMoistureDiscovery(uint8_t sensor_index, const char* sensor_name) {
@@ -552,7 +586,7 @@ void MqttManager::onMqttMessage(char* topic, char* payload, AsyncMqttClientMessa
     // Check if it's a relay command
     String topic_str(topic);
     if (topic_str.startsWith(_command_base_topic + "/relay_")) {
-        handleRelayCommand(payload_str, len);
+        handleRelayCommand(topic_str, payload_str, len);
     }
 
     // User callback
@@ -587,31 +621,38 @@ void MqttManager::subscribeToCommands() {
     LOG_D(TAG, "Subscribed to %s", cmd_wildcard.c_str());
 }
 
-void MqttManager::handleRelayCommand(const char* payload, size_t len) {
+void MqttManager::handleRelayCommand(const String& topic, const char* payload, size_t len) {
     if (!_relay_callback) {
         return;
     }
 
-    // Try to parse JSON payload
+    // Try to parse JSON payload first — relay index may be embedded in the JSON
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload, len);
 
-    if (error) {
-        // Simple ON/OFF payload
-        bool state = (strcmp(payload, "ON") == 0 || strcmp(payload, "1") == 0 ||
-                      strcmp(payload, "true") == 0);
-
-        // Extract relay index from topic (handled elsewhere)
-        // For now, assume relay 0
-        _relay_callback(0, state, 0);
-    } else {
-        // JSON payload
+    if (!error) {
+        // JSON payload: { "relay": N, "state": true/false, "duration": ms }
         uint8_t relay = doc["relay"] | 0;
         bool state = doc["state"] | false;
         uint32_t duration = doc["duration"] | 0;
-
         _relay_callback(relay, state, duration);
+        return;
     }
+
+    // Simple ON/OFF payload — extract relay index from topic.
+    // Topic format: <command_base_topic>/relay_N  (1-based, e.g. relay_1)
+    uint8_t relay_idx = 0;
+    String suffix = topic.substring(_command_base_topic.length());  // "/relay_N"
+    int relay_num = 0;
+    if (sscanf(suffix.c_str(), "/relay_%d", &relay_num) == 1 && relay_num >= 1) {
+        relay_idx = static_cast<uint8_t>(relay_num - 1);  // convert to 0-based
+    } else {
+        LOG_W(TAG, "Could not parse relay index from topic: %s", topic.c_str());
+    }
+
+    bool state = (strcmp(payload, "ON") == 0 || strcmp(payload, "1") == 0 ||
+                  strcmp(payload, "true") == 0);
+    _relay_callback(relay_idx, state, 0);
 }
 
 const char* MqttManager::getModelName() const {
