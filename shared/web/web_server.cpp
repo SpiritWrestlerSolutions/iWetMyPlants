@@ -749,12 +749,29 @@ const char* getDevicesHtml() {
 .empty{text-align:center;padding:2rem 1rem;color:var(--tm)}
 .empty b{display:block;font-size:1rem;color:var(--tc);margin-bottom:.5rem}
 .hdr-count{font-size:.85rem;font-weight:400;color:rgba(255,255,255,.8)}
+.pair-card{background:var(--cb);border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,.1);padding:1rem;margin-bottom:1rem;border-left:3px solid var(--pc)}
+.pair-card h2{font-size:1rem;margin-bottom:.5rem}
+.pair-row{display:flex;align-items:center;gap:.5rem;margin:.4rem 0;font-size:.9rem}
+.pair-row .k{color:var(--tm);min-width:60px}
+.pair-row .v{font-family:monospace;background:var(--bg);padding:2px 8px;border-radius:4px;flex:1;font-size:.85rem}
+.pair-row button{padding:4px 10px;font-size:.78rem;background:var(--sc);color:#fff;border:none;border-radius:4px;cursor:pointer}
+.pair-row button.ok{background:var(--pc)}
+.pair-help{font-size:.78rem;color:var(--tm);margin-top:.5rem;line-height:1.5}
+.unpair-btn{background:none;border:1px solid var(--bc);color:var(--tm);padding:2px 8px;border-radius:4px;font-size:.72rem;cursor:pointer;margin-left:.5rem}
+.unpair-btn:hover{background:#ffebee;border-color:var(--dc);color:var(--dc)}
 </style></head><body>
 <header><a href="/" class="back-link">&larr; Back</a><h1>Remote Devices <span class="hdr-count" id="hcount"></span></h1></header>
-<main><div id="devs"></div>
+<main>
+<div class="pair-card">
+<h2>Pair a new Remote</h2>
+<div class="pair-row"><span class="k">Hub IP</span><span class="v" id="hub-ip">—</span><button id="cp-ip">Copy</button></div>
+<div class="pair-row"><span class="k">Hub MAC</span><span class="v" id="hub-mac">—</span><button id="cp-mac">Copy</button></div>
+<p class="pair-help">On a fresh Remote, connect to its captive portal AP, enter the Hub IP above as the "Hub Address", and submit. The Remote will appear in the list below within a minute.</p>
+</div>
+<div id="devs"></div>
 <div class="card empty" id="nodev" style="display:none">
 <b>No remote devices found</b>
-Set a Remote's Hub Address to this Hub's IP and it will appear here automatically.
+Use the Hub IP/MAC above to point a Remote at this Hub.
 </div></main>
 <script>
 var H={},MP=180;
@@ -773,25 +790,55 @@ function poll(){
  }).catch(function(){});
 }
 function render(devs){
- var h='';
- devs.forEach(function(d){
+ var c=document.getElementById('devs');
+ while(c.firstChild)c.removeChild(c.firstChild);
+ devs.forEach(function(d,idx){
   var id='c'+d.mac.replace(/:/g,'');
   var on=d.online;
   var ago=calcAgo(d);
-  h+='<div class="dev"><div class="dev-hdr"><h2>'+esc(d.name)+'</h2>'
-   +'<span class="badge '+(on?'on':'off')+'">'+( on?'Online':'Offline')+'</span></div>'
+  var card=document.createElement('div');
+  card.className='dev';
+  card.innerHTML='<div class="dev-hdr"><h2></h2>'
+   +'<div><span class="badge '+(on?'on':'off')+'">'+(on?'Online':'Offline')+'</span>'
+   +'<button class="unpair-btn" data-idx="'+idx+'" data-name="">Unpair</button></div></div>'
    +'<div class="moisture-big"><span class="val">'+d.moisture_percent+'%</span><span class="lbl">Moisture</span></div>'
    +'<div class="chart-wrap"><canvas id="'+id+'"></canvas></div>'
    +'<div class="info-grid">'
    +'<span class="k">Signal</span><span class="v">'+d.rssi+' dBm</span>'
    +'<span class="k">Last Seen</span><span class="v">'+ago+'</span>'
-   +'<span class="k">MAC</span><span class="v">'+d.mac+'</span>';
-  if(d.battery_percent!==undefined)h+='<span class="k">Battery</span><span class="v">'+d.battery_percent+'%</span>';
-  h+='</div></div>';
+   +'<span class="k">MAC</span><span class="v">'+d.mac+'</span>'
+   +(d.battery_percent!==undefined?'<span class="k">Battery</span><span class="v">'+d.battery_percent+'%</span>':'')
+   +'</div>';
+  /* Set device name as textContent so the SSID-equivalent string can't escape into HTML */
+  card.querySelector('h2').textContent=d.name||d.mac;
+  var ub=card.querySelector('.unpair-btn');
+  ub.dataset.name=d.name||d.mac;
+  ub.addEventListener('click',function(){unpair(idx,ub.dataset.name)});
+  c.appendChild(card);
  });
- document.getElementById('devs').innerHTML=h;
  devs.forEach(function(d){drawChart(d.mac)});
 }
+function unpair(idx,name){
+ if(!confirm('Unpair "'+name+'"? It will reappear if it phones home again.'))return;
+ fetch('/api/devices/'+idx,{method:'DELETE'}).then(function(r){
+  if(!r.ok)throw 0;
+  poll();
+ }).catch(function(){alert('Unpair failed')});
+}
+function loadHubInfo(){
+ fetch('/api/espnow/export').then(function(r){return r.json()}).then(function(d){
+  document.getElementById('hub-ip').textContent=d.hub_ip||'—';
+  document.getElementById('hub-mac').textContent=d.hub_mac||'—';
+ }).catch(function(){});
+}
+function copyText(btn,text){
+ var done=function(){var orig=btn.textContent;btn.textContent='Copied';btn.classList.add('ok');setTimeout(function(){btn.textContent=orig;btn.classList.remove('ok')},1200)};
+ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,function(){alert(text)})}
+ else{var t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();try{document.execCommand('copy');done()}catch(e){alert(text)}document.body.removeChild(t)}
+}
+document.getElementById('cp-ip').addEventListener('click',function(){copyText(this,document.getElementById('hub-ip').textContent)});
+document.getElementById('cp-mac').addEventListener('click',function(){copyText(this,document.getElementById('hub-mac').textContent)});
+loadHubInfo();
 function drawChart(mac){
  var el=document.getElementById('c'+mac.replace(/:/g,''));
  if(!el)return;
