@@ -53,12 +53,13 @@ All three share a common `shared/` library compiled in via `build_src_filter`. T
 - **Role:** Environmental controller. Reads temp/humidity + moisture sensors, controls relay bank for automated watering.
 - **Entry point:** `src/main_greenhouse.cpp` → `Greenhouse.begin()` / `Greenhouse.loop()`
 - **Controller:** `greenhouse/src/greenhouse_controller.h` / `.cpp`
+- **Scope (since the 2026-04 rescope):** environmental sensor reporter + relay executor only. No local moisture sensing, no autonomous automation — relay decisions arrive from Hub via ESP-NOW or from Home Assistant via MQTT.
 - **Key capabilities:**
-  - Up to 4 moisture sensors + 1 environmental sensor (DHT or SHT)
-  - Up to 8 relays (GPIOs 16,17,18,19,23,25,26,27) with safety limits and cooldown
-  - `AutomationEngine` evaluates `SensorRelayBinding` rules every check interval
+  - 1 environmental sensor (DHT or SHT)
+  - Up to 8 relays (GPIOs 16,17,18,19,23,25,26,27) with per-relay safety limits (max-on-time, min-off-time, cooldown) enforced from `RelayConfig`
   - Receives `RELAY_COMMAND` via ESP-NOW from Hub
-  - Sends environmental readings and moisture readings via ESP-NOW to Hub
+  - Receives relay commands via MQTT from Home Assistant (HA discovery published at connect)
+  - Sends environmental readings via MQTT to broker
   - Connects to WiFi + MQTT independently (not routed through Hub)
   - Hosts `WebServer` for local relay control and config
   - Implements `ImprovSerial` for USB provisioning
@@ -262,19 +263,11 @@ DeviceConfig {
 - `emergencyStop()` — turns all relays off, ignoring safety limits
 - Active-low output: most relay modules require `active_low=true` (write LOW to turn ON)
 
-### 7.2 Automation Engine (`greenhouse/src/automation_engine.h/.cpp`)
+### 7.2 Automation (was `AutomationEngine`, removed 2026-04)
 
-**Class:** `AutomationEngine`
-- Holds up to `IWMP_MAX_BINDINGS` `SensorRelayBinding` entries
-- Each binding maps `sensor_index` → `relay_index` with thresholds:
-  - `dry_threshold` (%) — below this, activate relay (start watering)
-  - `wet_threshold` (%) — above this, deactivate relay (stop watering)
-  - `max_runtime_sec` — safety shutoff for this specific binding
-  - `check_interval_sec` — how often to evaluate
-  - `hysteresis_enabled` — prevents rapid cycling
-- `update(moisture_readings[])` called from `GreenhouseController::handleOperationalState()`
-- Can be globally paused: `pause(duration_ms)` / `resume()`
-- `GreenhouseController::onMoistureReading()` feeds incoming ESP-NOW moisture data into automation engine too (for cross-device watering triggers)
+The Greenhouse formerly hosted an in-process `AutomationEngine` that evaluated `SensorRelayBinding` rules and drove relays on a moisture-versus-threshold policy. That code was removed when the Greenhouse was rescoped to a "pro add-on" — environmental sensor + relay executor only. All watering decisions now originate from Hub (via ESP-NOW `RELAY_COMMAND`) or Home Assistant (via MQTT `cmd/relay_N`).
+
+The `SensorRelayBinding` struct and the `bindings[]` array slot in `DeviceConfig` are kept for NVS-layout stability with in-field devices but are dormant.
 
 ---
 
@@ -411,7 +404,7 @@ Three environments share a base `[env]` section:
 
 **Greenhouse (`env:greenhouse`):**
 - `board = esp32dev`, `partitions = huge_app.csv`
-- `-DIWMP_DEVICE_TYPE=2 -DIWMP_MAX_SENSORS=4 -DIWMP_MAX_RELAYS=8 -DIWMP_MAX_BINDINGS=8 -DIWMP_HAS_AUTOMATION=1`
+- `-DIWMP_DEVICE_TYPE=2 -DIWMP_MAX_SENSORS=4 -DIWMP_MAX_RELAYS=8 -DIWMP_MAX_BINDINGS=8` (`MAX_BINDINGS` retained for NVS layout compat only)
 - `build_src_filter`: all `shared/**/*.cpp` + `greenhouse/src/**/*.cpp` + `main_greenhouse.cpp`
 
 Debug variants (`env:hub_debug`, `env:remote_debug`, `env:greenhouse_debug`) add `-DCORE_DEBUG_LEVEL=5 -DIWMP_DEBUG=1`.
@@ -449,19 +442,25 @@ Remote (ESP32-C3) [wakes from deep sleep]
   └─ PowerModes::enterDeepSleep(300 s)
 ```
 
-### 12.3 Automated Watering (Greenhouse)
+### 12.3 Relay Activation (Greenhouse)
+
+Relay decisions originate externally; the Greenhouse only executes them.
 
 ```
-Greenhouse (ESP32-WROOM)
-  └─ MoistureSensor::readPercent()           every 10 s
-  └─ AutomationEngine::update(readings[])
-       └─ SensorRelayBinding check:
-           if (moisture < dry_threshold)
-               RelayManager::setRelay(relay_idx, true, max_runtime)
-           if (moisture > wet_threshold)
-               RelayManager::setRelay(relay_idx, false)
-  └─ publishState() MQTT                     every publish_interval
-       → MQTT → Home Assistant
+From Hub via ESP-NOW:
+  Hub                                            Greenhouse
+   ├─ HubController automation rule fires         ┊
+   └─ EspNow.sendRelayCommand(gh_mac, idx, on, dur)
+                                                  └─ onEspNowReceive() → onRelayCommand()
+                                                  └─ RelayManager::setRelay(idx, true, dur)
+                                                  └─ publishRelayState() MQTT
+
+From Home Assistant via MQTT:
+  HA                                             Greenhouse
+   └─ publish iwetmyplants/<gh_id>/cmd/relay_N "ON"
+                                                  └─ Mqtt.onRelayCommand()
+                                                  └─ RelayManager::setRelay(N-1, true, 0)
+                                                  └─ publishRelayState() MQTT
 ```
 
 ### 12.4 Manual Relay Command (HA → Hub → Greenhouse)
@@ -556,9 +555,8 @@ iWetMyPlants/
 │   └── power_modes.h/.cpp        PowerModes, deep sleep, RTC memory
 │
 ├── greenhouse/src/
-│   ├── greenhouse_controller.h/.cpp  GreenhouseController
-│   ├── relay_manager.h/.cpp          RelayManager, safety limits
-│   └── automation_engine.h/.cpp      AutomationEngine, SensorRelayBinding
+│   ├── greenhouse_controller.h/.cpp  GreenhouseController (env + relay executor)
+│   └── relay_manager.h/.cpp          RelayManager, safety limits
 │
 ├── shared/
 │   ├── communication/

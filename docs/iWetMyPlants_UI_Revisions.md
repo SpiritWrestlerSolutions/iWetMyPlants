@@ -121,5 +121,5 @@ If a sensor has been given a custom name (e.g., "Kitchen Basil"), display that n
 ## Notes for Implementation
 
 - The architecture doc confirms that all `/api/config/{section}` endpoints already exist and accept GET/POST. Most of these UI changes are purely frontend work — adding forms that read/write to existing API endpoints.
-- The Greenhouse's `AutomationEngine` bindings (sensor→relay thresholds) are a separate, more complex UI that isn't addressed here. That should be its own design pass once the basic relay and sensor config pages are solid.
+- The Greenhouse no longer hosts a local automation engine (rescoped 2026-04). Relay decisions originate from Hub via ESP-NOW or Home Assistant via MQTT. No threshold-binding UI is needed on the Greenhouse — the existing relay-state controls are sufficient.
 - The `RemoteWeb` is intentionally minimal (~10KB PROGMEM HTML) to fit on the ESP32-C3. Any changes to the Remote's UI should be mindful of flash budget.
