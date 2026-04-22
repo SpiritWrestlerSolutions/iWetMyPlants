@@ -98,34 +98,6 @@ public:
     // ============ Safety Features ============
 
     /**
-     * @brief Set maximum on time
-     * @param index Relay index
-     * @param seconds Max on time in seconds
-     */
-    void setMaxOnTime(uint8_t index, uint32_t seconds);
-
-    /**
-     * @brief Set minimum off time between activations
-     * @param index Relay index
-     * @param seconds Min off time in seconds
-     */
-    void setMinOffTime(uint8_t index, uint32_t seconds);
-
-    /**
-     * @brief Set cooldown period after deactivation
-     * @param index Relay index
-     * @param seconds Cooldown in seconds
-     */
-    void setCooldown(uint8_t index, uint32_t seconds);
-
-    /**
-     * @brief Set daily runtime limit
-     * @param index Relay index
-     * @param max_runtime_sec Maximum runtime per day
-     */
-    void setDailyLimit(uint8_t index, uint32_t max_runtime_sec);
-
-    /**
      * @brief Emergency stop all relays
      */
     void emergencyStopAll();
@@ -150,16 +122,10 @@ public:
      */
     const char* getLockoutReason(uint8_t index) const;
 
-    /**
-     * @brief Reset daily counters (call at midnight)
-     */
-    void resetDailyCounters();
-
 private:
     RelayConfig _configs[IWMP_MAX_RELAYS];
     RelayState _states[IWMP_MAX_RELAYS];
     uint8_t _count = 0;
-    uint32_t _daily_limit[IWMP_MAX_RELAYS] = {0};
 
     /**
      * @brief Check all safety conditions

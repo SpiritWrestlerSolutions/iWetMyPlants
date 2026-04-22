@@ -8,20 +8,30 @@
 #include "logger.h"
 #include "watchdog.h"
 #include "web_server.h"
-#include "calibration_manager.h"
 #include "api_endpoints.h"
 
 namespace iwmp {
 
-// Global greenhouse controller instance
 GreenhouseController Greenhouse;
 
 static constexpr const char* TAG = "GH";
 
+static const char* stateName(GreenhouseState s) {
+    switch (s) {
+        case GreenhouseState::BOOT:         return "BOOT";
+        case GreenhouseState::LOAD_CONFIG:  return "LOAD_CONFIG";
+        case GreenhouseState::WIFI_CONNECT: return "WIFI_CONNECT";
+        case GreenhouseState::MQTT_CONNECT: return "MQTT_CONNECT";
+        case GreenhouseState::AP_MODE:      return "AP_MODE";
+        case GreenhouseState::OPERATIONAL:  return "OPERATIONAL";
+    }
+    return "?";
+}
+
 void GreenhouseController::begin() {
     LOG_I(TAG, "Initializing Greenhouse controller");
 
-    // Initialize relays
+    // Gather enabled relay configs
     RelayConfig relay_configs[IWMP_MAX_RELAYS];
     uint8_t relay_count = 0;
 
@@ -37,47 +47,24 @@ void GreenhouseController::begin() {
         LOG_I(TAG, "Initialized %d relays", relay_count);
     }
 
-    // Initialize automation
-    _automation.begin(&_relays);
-
-    // Load automation bindings from config
-    for (uint8_t i = 0; i < IWMP_MAX_BINDINGS; i++) {
-        const SensorRelayBinding& binding = Config.getBinding(i);
-        if (binding.enabled) {
-            _automation.addBinding(binding);
-        }
-    }
-
     enterState(GreenhouseState::BOOT);
 }
 
 void GreenhouseController::loop() {
     switch (_state) {
-        case GreenhouseState::BOOT:
-            handleBootState();
-            break;
-        case GreenhouseState::LOAD_CONFIG:
-            handleLoadConfigState();
-            break;
-        case GreenhouseState::WIFI_CONNECT:
-            handleWifiConnectState();
-            break;
-        case GreenhouseState::MQTT_CONNECT:
-            handleMqttConnectState();
-            break;
-        case GreenhouseState::AP_MODE:
-            handleApModeState();
-            break;
-        case GreenhouseState::OPERATIONAL:
-            handleOperationalState();
-            break;
+        case GreenhouseState::BOOT:         handleBootState();         break;
+        case GreenhouseState::LOAD_CONFIG:  handleLoadConfigState();   break;
+        case GreenhouseState::WIFI_CONNECT: handleWifiConnectState();  break;
+        case GreenhouseState::MQTT_CONNECT: handleMqttConnectState();  break;
+        case GreenhouseState::AP_MODE:      handleApModeState();       break;
+        case GreenhouseState::OPERATIONAL:  handleOperationalState();  break;
     }
 }
 
 void GreenhouseController::enterState(GreenhouseState new_state) {
     if (_state == new_state) return;
 
-    LOG_I(TAG, "State: %d -> %d", (int)_state, (int)new_state);
+    LOG_I(TAG, "State: %s -> %s", stateName(_state), stateName(new_state));
     _state = new_state;
     _state_enter_time = millis();
 }
@@ -85,8 +72,6 @@ void GreenhouseController::enterState(GreenhouseState new_state) {
 void GreenhouseController::handleBootState() {
     LOG_I(TAG, "Boot state");
 
-    // Initialize sensors
-    initializeSensors();
     initializeEnvSensor();
 
     enterState(GreenhouseState::LOAD_CONFIG);
@@ -103,9 +88,6 @@ void GreenhouseController::handleLoadConfigState() {
         _improv.setConnectCallback([this](const char* ssid, const char* pwd, String& outUrl) -> bool {
             WiFiMgr.stopCaptivePortal();
 
-            // Keep the WiFi driver alive by switching to AP+STA instead of
-            // tearing down AP first — avoids the C3 hang from WiFi.disconnect()
-            // on an uninitialised driver.
             WiFi.mode(WIFI_AP_STA);
             WiFi.begin(ssid, pwd);
 
@@ -116,7 +98,6 @@ void GreenhouseController::handleLoadConfigState() {
             }
 
             if (WiFi.status() != WL_CONNECTED) {
-                // Restore AP so user can still configure via captive portal
                 char ap_ssid[32];
                 snprintf(ap_ssid, sizeof(ap_ssid), "IWMP-GH-%s", Config.getDeviceId() + 6);
                 WiFi.mode(WIFI_AP);
@@ -125,12 +106,9 @@ void GreenhouseController::handleLoadConfigState() {
                 return false;
             }
 
-            // Connected — now drop the AP cleanly (softAPdisconnect false keeps
-            // the WiFi driver running in STA mode)
             WiFi.softAPdisconnect(false);
             WiFi.mode(WIFI_STA);
 
-            // Wait for DHCP to assign an IP so we don't send an invalid URL
             uint32_t t2 = millis();
             while ((uint32_t)WiFi.localIP() == 0 && millis() - t2 < 5000) {
                 Watchdog.feed();
@@ -149,7 +127,6 @@ void GreenhouseController::handleLoadConfigState() {
 
     const auto& wifi_cfg = Config.getWifi();
 
-    // Check if we have WiFi credentials
     if (strlen(wifi_cfg.ssid) > 0) {
         enterState(GreenhouseState::WIFI_CONNECT);
     } else {
@@ -170,36 +147,30 @@ void GreenhouseController::handleWifiConnectState() {
         wifi_started = true;
     }
 
-    // Check connection
     if (WiFiMgr.isConnected()) {
         LOG_I(TAG, "WiFi connected: %s", WiFiMgr.getIP().toString().c_str());
         wifi_started = false;
 
-        // Setup ESP-NOW on WiFi channel
         const auto& espnow_cfg = Config.getEspNow();
         if (espnow_cfg.enabled) {
             uint8_t channel = WiFiMgr.getCurrentChannel();
             if (EspNow.begin(channel)) {
                 LOG_I(TAG, "ESP-NOW initialized on channel %d", channel);
 
-                // Set up receive callback
                 EspNow.onReceive([this](const uint8_t* mac, const uint8_t* data, int len) {
                     onEspNowReceive(mac, data, len);
                 });
 
-                // Add hub as peer if configured
                 if (memcmp(espnow_cfg.hub_mac, "\0\0\0\0\0\0", 6) != 0) {
                     EspNow.addPeer(espnow_cfg.hub_mac);
                 }
             }
         }
 
-        // Check if MQTT is configured
         const auto& mqtt_cfg = Config.getMqtt();
         if (mqtt_cfg.enabled) {
             enterState(GreenhouseState::MQTT_CONNECT);
         } else {
-            // Start web server
             Web.begin(Config.getConfig().identity);
             setupWebRoutes();
             enterState(GreenhouseState::OPERATIONAL);
@@ -207,11 +178,9 @@ void GreenhouseController::handleWifiConnectState() {
         return;
     }
 
-    // Keep Improv responsive while awaiting WiFi — ensures the installer
-    // can detect the device and (re-)provision even if credentials fail.
+    // Keep Improv responsive while awaiting WiFi
     _improv.loop();
 
-    // Check timeout
     if ((millis() - _state_enter_time) > WIFI_CONNECT_TIMEOUT_MS) {
         LOG_W(TAG, "WiFi connection timeout");
         wifi_started = false;
@@ -231,25 +200,17 @@ void GreenhouseController::handleMqttConnectState() {
         if (Mqtt.begin(mqtt_cfg, identity)) {
             Mqtt.connect();
 
-            // Set up callbacks
             Mqtt.onConnect([this](bool session_present) {
                 LOG_I(TAG, "MQTT connected (session=%d)", session_present);
                 if (Config.getMqtt().ha_discovery_enabled) {
                     Mqtt.publishDiscovery();
+
+                    // Greenhouse is env + relay only. Clean up any legacy
+                    // moisture discovery entities from prior firmware.
                     for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
-                        const auto& scfg = Config.getMoistureSensor(i);
-                        if (!scfg.enabled) {
-                            Mqtt.removeMoistureDiscovery(i);
-                            continue;
-                        }
-                        char name[32];
-                        if (scfg.sensor_name[0] != '\0') {
-                            strlcpy(name, scfg.sensor_name, sizeof(name));
-                        } else {
-                            snprintf(name, sizeof(name), "Plant %d", i + 1);
-                        }
-                        Mqtt.publishMoistureDiscovery(i, name);
+                        Mqtt.removeMoistureDiscovery(i);
                     }
+
                     const auto& env_cfg = Config.getEnvSensor();
                     if (env_cfg.sensor_type != EnvSensorType::NONE) {
                         Mqtt.publishTemperatureDiscovery();
@@ -258,6 +219,7 @@ void GreenhouseController::handleMqttConnectState() {
                         Mqtt.removeTemperatureDiscovery();
                         Mqtt.removeHumidityDiscovery();
                     }
+
                     for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
                         const auto& rcfg = Config.getRelay(i);
                         if (!rcfg.enabled) {
@@ -289,14 +251,12 @@ void GreenhouseController::handleMqttConnectState() {
         }
     }
 
-    // Check connection
     Mqtt.loop();
 
     if (Mqtt.isConnected()) {
         LOG_I(TAG, "MQTT connected");
         mqtt_started = false;
 
-        // Start web server
         Web.begin(Config.getConfig().identity);
         setupWebRoutes();
 
@@ -304,10 +264,8 @@ void GreenhouseController::handleMqttConnectState() {
         return;
     }
 
-    // Keep Improv responsive during MQTT connection wait
     _improv.loop();
 
-    // Check timeout
     if ((millis() - _state_enter_time) > MQTT_CONNECT_TIMEOUT_MS) {
         LOG_W(TAG, "MQTT connection timeout, continuing without MQTT");
         mqtt_started = false;
@@ -338,28 +296,22 @@ void GreenhouseController::handleApModeState() {
         ap_started = true;
     }
 
-    // Improv is already initialized at boot (see handleLoadConfigState)
-    // Process WiFi (captive portal DNS) and Improv serial
     WiFiMgr.loop();
     _improv.loop();
 
     if (Web.isRunning()) {
         Web.update();
     }
-    Calibration.update();
 
-    // Keep life-support systems running offline
+    // Life-support: relay timers still run offline
     _relays.update();
-    _automation.update();
 
     uint32_t now = millis();
     if ((now - _last_sensor_read_time) >= SENSOR_READ_INTERVAL_MS) {
         _last_sensor_read_time = now;
-        readSensors();
         readEnvSensor();
     }
 
-    // Improv provisioning succeeded -- drain TX then reboot
     if (_improv.wasReProvisioned()) {
         LOG_I(TAG, "Improv provisioning complete -- rebooting");
         delay(1500);
@@ -372,35 +324,22 @@ void GreenhouseController::handleOperationalState() {
 
     if (!operational_init) {
         operational_init = true;
-        // Notify the installer browser that the device is already connected
         _improv.broadcastProvisioned("http://" + WiFiMgr.getIP().toString());
     }
 
     uint32_t now = millis();
 
-    // Drive WiFi auto-reconnect (setAutoReconnect(false) means this is the
-    // only reconnect mechanism — missing this call = permanent disconnect
-    // after the first router drop/channel-switch/DHCP expiry).
     WiFiMgr.loop();
 
-    // Update web server (OTA reboot, calibration WebSocket)
     if (Web.isRunning()) {
         Web.update();
     }
 
-    // Update relay manager (handles timeouts)
     _relays.update();
 
-    // Update automation engine
-    _automation.update();
-    
-    Calibration.update();
-
-    // Update MQTT
     if (Mqtt.isInitialized()) {
         Mqtt.loop();
 
-        // Reconnect if needed
         if (!Mqtt.isConnected() && WiFiMgr.isConnected()) {
             static uint32_t last_reconnect_attempt = 0;
             if ((now - last_reconnect_attempt) > 10000) {
@@ -411,38 +350,28 @@ void GreenhouseController::handleOperationalState() {
         }
     }
 
-    // Update ESP-NOW
     if (EspNow.isInitialized()) {
         EspNow.update();
     }
 
-    // Read sensors periodically
     if ((now - _last_sensor_read_time) >= SENSOR_READ_INTERVAL_MS) {
         _last_sensor_read_time = now;
-        readSensors();
         readEnvSensor();
     }
 
-    // Publish state periodically
-    if ((now - _last_publish_time) >= Config.getMqtt().publish_interval_sec * 1000) {
+    // publish_interval_sec is uint16_t; widen before multiply to avoid overflow
+    uint32_t publish_interval_ms = (uint32_t)Config.getMqtt().publish_interval_sec * 1000UL;
+    if ((now - _last_publish_time) >= publish_interval_ms) {
         _last_publish_time = now;
         publishState();
     }
 
-    // Improv WiFi Serial -- allow browser to re-provision even when already connected
     _improv.loop();
     if (_improv.wasReProvisioned()) {
         LOG_I(TAG, "Improv re-provisioning complete -- rebooting");
         delay(1500);
         ESP.restart();
     }
-}
-
-MoistureSensor* GreenhouseController::getMoistureSensor(uint8_t index) {
-    if (index >= _moisture_sensor_count) {
-        return nullptr;
-    }
-    return _moisture_sensors[index].get();
 }
 
 void GreenhouseController::onRelayCommand(const RelayCommandMsg& msg) {
@@ -456,14 +385,6 @@ void GreenhouseController::onRelayCommand(const RelayCommandMsg& msg) {
     setRelay(msg.relay_index, msg.state, msg.duration_sec);
 }
 
-void GreenhouseController::onMoistureReading(const MoistureReadingMsg& msg) {
-    LOG_D(TAG, "Moisture reading: sensor=%d, value=%d%%",
-          msg.sensor_index, msg.moisture_percent);
-
-    // Forward to automation engine
-    _automation.onMoistureReading(msg.sensor_index, msg.moisture_percent);
-}
-
 bool GreenhouseController::setRelay(uint8_t index, bool state, uint32_t duration_sec) {
     if (state) {
         return _relays.turnOn(index, duration_sec);
@@ -475,39 +396,6 @@ bool GreenhouseController::setRelay(uint8_t index, bool state, uint32_t duration
 void GreenhouseController::emergencyStop() {
     LOG_W(TAG, "EMERGENCY STOP");
     _relays.emergencyStopAll();
-    _automation.setEnabled(false);
-}
-
-void GreenhouseController::setAutomationEnabled(bool enabled) {
-    _automation.setEnabled(enabled);
-    LOG_I(TAG, "Automation %s", enabled ? "enabled" : "disabled");
-}
-
-bool GreenhouseController::isAutomationEnabled() const {
-    return _automation.isEnabled();
-}
-
-void GreenhouseController::initializeSensors() {
-    LOG_I(TAG, "Initializing moisture sensors");
-
-    _moisture_sensor_count = 0;
-
-    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
-        const auto& sensor_cfg = Config.getMoistureSensor(i);
-
-        if (!sensor_cfg.enabled) {
-            continue;
-        }
-
-        auto sensor = createMoistureSensor(sensor_cfg, i);
-        if (sensor) {
-            sensor->begin();
-            _moisture_sensors[_moisture_sensor_count++] = std::move(sensor);
-            LOG_I(TAG, "Sensor %d initialized: %s", i, _moisture_sensors[_moisture_sensor_count-1]->getName());
-        }
-    }
-
-    LOG_I(TAG, "Initialized %d moisture sensors", _moisture_sensor_count);
 }
 
 void GreenhouseController::initializeEnvSensor() {
@@ -529,20 +417,7 @@ void GreenhouseController::initializeEnvSensor() {
         _sht_sensor = std::make_unique<ShtSensor>(env_cfg.sensor_type, env_cfg.i2c_address);
         _sht_sensor->begin();
     }
-}
-
-void GreenhouseController::readSensors() {
-    for (uint8_t i = 0; i < _moisture_sensor_count; i++) {
-        if (_moisture_sensors[i] && _moisture_sensors[i]->isReady()) {
-            uint16_t raw = _moisture_sensors[i]->readRawAveraged();
-            uint8_t percent = _moisture_sensors[i]->rawToPercent(raw);
-
-            LOG_D(TAG, "Sensor %d: %d%% (raw=%d)", i, percent, raw);
-
-            // Forward to automation
-            _automation.onMoistureReading(i, percent);
-        }
-    }
+    // SHT40/SHT41 fall through — Phase 6 will add driver support.
 }
 
 void GreenhouseController::readEnvSensor() {
@@ -557,11 +432,7 @@ void GreenhouseController::readEnvSensor() {
     if (!isnan(temp) && !isnan(humidity)) {
         _last_temperature = temp;
         _last_humidity = humidity;
-
         LOG_D(TAG, "Environment: %.1f°C, %.1f%%", temp, humidity);
-
-        // Forward to automation
-        _automation.onEnvironmentalReading(temp, humidity);
     }
 }
 
@@ -570,41 +441,26 @@ void GreenhouseController::publishState() {
         return;
     }
 
-    // Publish environmental readings
     if (!isnan(_last_temperature) && !isnan(_last_humidity)) {
         Mqtt.publishEnvironmentalReading(_last_temperature, _last_humidity);
     }
 
-    // Publish relay states
     for (uint8_t i = 0; i < _relays.getCount(); i++) {
         Mqtt.publishRelayState(i, _relays.isOn(i));
     }
 
-    // Build and publish sensor readings
+    // Build aggregated state payload
     SensorReadings readings;
     readings.moisture_count = 0;
 
-    for (uint8_t i = 0; i < _moisture_sensor_count; i++) {
-        if (_moisture_sensors[i] && readings.moisture_count < 8) {
-            uint8_t idx = readings.moisture_count;
-            readings.moisture[idx].valid = true;
-            readings.moisture[idx].index = i;
-            readings.moisture[idx].raw_value = _moisture_sensors[i]->readRawAveraged();
-            readings.moisture[idx].percent = _moisture_sensors[i]->rawToPercent(readings.moisture[idx].raw_value);
-            readings.moisture_count++;
-        }
-    }
-
-    // Environmental readings
     if (!isnan(_last_temperature) && !isnan(_last_humidity)) {
         readings.has_environmental = true;
         readings.temperature_c = _last_temperature;
         readings.humidity_percent = _last_humidity;
     }
 
-    // Relay states
     readings.relay_count = 0;
-    for (uint8_t i = 0; i < _relays.getCount() && i < 4; i++) {
+    for (uint8_t i = 0; i < _relays.getCount() && i < IWMP_MAX_RELAYS; i++) {
         readings.relays[i].valid = true;
         readings.relays[i].index = i;
         readings.relays[i].state = _relays.isOn(i);
@@ -615,62 +471,7 @@ void GreenhouseController::publishState() {
 }
 
 void GreenhouseController::setupWebRoutes() {
-    // Register sensor data callback for API
-    ApiEndpoints::onSensorData([this](uint8_t index, uint16_t& raw, uint8_t& percent) -> bool {
-        if (index < IWMP_MAX_SENSORS && _moisture_sensors[index]) {
-            raw = _moisture_sensors[index]->readRaw();
-            percent = _moisture_sensors[index]->readPercent();
-            return true;
-        }
-        return false;
-    });
-
-    Web.addRouteWithBody("/api/calibration/start", HTTP_POST,
-        [](AsyncWebServerRequest* request) {},
-        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
-            JsonDocument doc;
-            if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>() || !doc["point"].is<const char*>()) {
-                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
-                return;
-            }
-            uint8_t idx = doc["sensor"];
-            const char* point = doc["point"];
-            if (idx >= IWMP_MAX_SENSORS || !_moisture_sensors[idx]) {
-                request->send(400, "application/json", "{\"error\":\"Invalid sensor\"}");
-                return;
-            }
-            bool is_wet = (strcmp(point, "wet") == 0);
-            if (Calibration.begin(_moisture_sensors[idx].get(), is_wet)) {
-                request->send(200, "application/json", "{\"success\":true}");
-            } else {
-                request->send(400, "application/json", "{\"error\":\"Calibration busy\"}");
-            }
-        });
-
-    Web.addRoute("/api/calibration/status", HTTP_GET, [this](AsyncWebServerRequest* req) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "{\"state\":%d,\"progress\":%u,\"value\":%u,\"error\":\"%s\"}",
-                 (int)Calibration.getState(), Calibration.getProgress(), Calibration.getResult(),
-                 Calibration.getErrorMessage());
-        req->send(200, "application/json", buf);
-    });
-
-    Web.addRouteWithBody("/api/calibration/save", HTTP_POST,
-        [](AsyncWebServerRequest* request) {},
-        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
-            JsonDocument doc;
-            if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>()) {
-                request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
-                return;
-            }
-            if (Calibration.applyAndSave(doc["sensor"])) {
-                request->send(200, "application/json", "{\"success\":true}");
-            } else {
-                request->send(400, "application/json", "{\"error\":\"Nothing to save\"}");
-            }
-        });
-
-    // Register relay state callback
+    // Relay state callback
     ApiEndpoints::onRelayState([this](uint8_t index, bool& state) -> bool {
         if (index < IWMP_MAX_RELAYS) {
             state = _relays.getState(index).current_state;
@@ -679,12 +480,12 @@ void GreenhouseController::setupWebRoutes() {
         return false;
     });
 
-    // Register relay control callback
+    // Relay control callback
     ApiEndpoints::onRelayControl([this](uint8_t index, bool state) -> bool {
         return setRelay(index, state, 0);
     });
 
-    // Register environmental data callback
+    // Environmental data callback
     ApiEndpoints::onEnvironmentalData([this](float& temperature, float& humidity, const char*& sensor_type) -> bool {
         temperature = _last_temperature;
         humidity = _last_humidity;
@@ -699,13 +500,6 @@ void GreenhouseController::setupWebRoutes() {
             default:                    sensor_type = "None";    break;
         }
         return _dht_sensor != nullptr || _sht_sensor != nullptr;
-    });
-
-    // Automation status endpoint (GET /automation)
-    Web.addRoute("/automation", HTTP_GET, [this](AsyncWebServerRequest* req) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "{\"enabled\":%s}", isAutomationEnabled() ? "true" : "false");
-        req->send(200, "application/json", buf);
     });
 
     // Relay control endpoint
@@ -732,17 +526,6 @@ void GreenhouseController::setupWebRoutes() {
         }
     });
 
-    // Automation control
-    Web.addRoute("/automation/enable", HTTP_POST, [this](AsyncWebServerRequest* req) {
-        setAutomationEnabled(true);
-        req->send(200, "application/json", "{\"enabled\":true}");
-    });
-
-    Web.addRoute("/automation/disable", HTTP_POST, [this](AsyncWebServerRequest* req) {
-        setAutomationEnabled(false);
-        req->send(200, "application/json", "{\"enabled\":false}");
-    });
-
     // Emergency stop
     Web.addRoute("/emergency-stop", HTTP_POST, [this](AsyncWebServerRequest* req) {
         emergencyStop();
@@ -764,27 +547,10 @@ void GreenhouseController::onEspNowReceive(const uint8_t* mac, const uint8_t* da
             }
             break;
 
-        case MessageType::MOISTURE_READING:
-            if (len >= sizeof(MoistureReadingMsg)) {
-                onMoistureReading(*reinterpret_cast<const MoistureReadingMsg*>(data));
-            }
-            break;
-
         default:
             LOG_D(TAG, "Unhandled message type: %d", (int)header->type);
             break;
     }
-}
-
-void GreenhouseController::onMqttMessage(const char* topic, const char* payload) {
-    LOG_D(TAG, "MQTT message: %s = %s", topic, payload);
-    // Relay commands handled by MqttManager callback
-}
-
-bool GreenhouseController::isConfigButtonPressed() {
-    // Check GPIO0 (common boot button)
-    // Could be made configurable
-    return digitalRead(0) == LOW;
 }
 
 } // namespace iwmp

@@ -27,7 +27,6 @@ void RelayManager::begin(const RelayConfig configs[], uint8_t count) {
         memset(&_states[i], 0, sizeof(RelayState));
         _states[i].current_state = false;
         _states[i].locked_out = false;
-        _daily_limit[i] = 0;
 
         // Configure GPIO if enabled
         if (_configs[i].enabled && _configs[i].gpio_pin > 0) {
@@ -179,30 +178,6 @@ void RelayManager::update() {
     }
 }
 
-void RelayManager::setMaxOnTime(uint8_t index, uint32_t seconds) {
-    if (index >= _count) return;
-    _configs[index].max_on_time_sec = seconds;
-    LOG_D(TAG, "Relay %d max_on_time set to %lu sec", index, seconds);
-}
-
-void RelayManager::setMinOffTime(uint8_t index, uint32_t seconds) {
-    if (index >= _count) return;
-    _configs[index].min_off_time_sec = seconds;
-    LOG_D(TAG, "Relay %d min_off_time set to %lu sec", index, seconds);
-}
-
-void RelayManager::setCooldown(uint8_t index, uint32_t seconds) {
-    if (index >= _count) return;
-    _configs[index].cooldown_sec = seconds;
-    LOG_D(TAG, "Relay %d cooldown set to %lu sec", index, seconds);
-}
-
-void RelayManager::setDailyLimit(uint8_t index, uint32_t max_runtime_sec) {
-    if (index >= _count) return;
-    _daily_limit[index] = max_runtime_sec;
-    LOG_D(TAG, "Relay %d daily limit set to %lu sec", index, max_runtime_sec);
-}
-
 void RelayManager::emergencyStopAll() {
     LOG_W(TAG, "EMERGENCY STOP ALL RELAYS");
 
@@ -235,21 +210,6 @@ const char* RelayManager::getLockoutReason(uint8_t index) const {
     return _states[index].lockout_reason;
 }
 
-void RelayManager::resetDailyCounters() {
-    LOG_I(TAG, "Resetting daily counters");
-
-    for (uint8_t i = 0; i < _count; i++) {
-        _states[i].total_on_time_today = 0;
-        _states[i].activation_count = 0;
-
-        // Clear daily limit lockouts
-        if (_states[i].locked_out &&
-            strstr(_states[i].lockout_reason, "daily limit") != nullptr) {
-            clearLockout(i);
-        }
-    }
-}
-
 bool RelayManager::checkSafetyConditions(uint8_t index) {
     // Check lockout
     if (_states[index].locked_out) {
@@ -275,16 +235,6 @@ bool RelayManager::checkSafetyConditions(uint8_t index) {
         if (since_off < _configs[index].cooldown_sec) {
             LOG_W(TAG, "Relay %d in cooldown (%lu < %lu sec)",
                   index, since_off, _configs[index].cooldown_sec);
-            return false;
-        }
-    }
-
-    // Check daily limit
-    if (_daily_limit[index] > 0) {
-        if (_states[index].total_on_time_today >= _daily_limit[index]) {
-            lockout(index, "Exceeded daily limit");
-            LOG_W(TAG, "Relay %d exceeded daily limit (%lu >= %lu sec)",
-                  index, _states[index].total_on_time_today, _daily_limit[index]);
             return false;
         }
     }

@@ -2,8 +2,11 @@
  * @file main_greenhouse.cpp
  * @brief Greenhouse Manager entry point
  *
- * Environmental control with relay automation, temp/humidity monitoring,
- * and sensor-to-relay bindings for automated watering.
+ * Environmental sensor reporter (DHT/SHT) + relay executor. Receives
+ * relay commands from Hub via ESP-NOW or from Home Assistant via MQTT;
+ * publishes temperature/humidity. No local moisture sensing or
+ * autonomous automation -- the greenhouse is a "pro add-on", not a
+ * standalone controller.
  */
 
 #include <Arduino.h>
