@@ -432,9 +432,18 @@ void EspNowManager::clearAllPeers() {
         return;
     }
 
+    // ESP-NOW supports up to 20 peers; cap iterations to prevent a runaway
+    // loop if esp_now_fetch_peer ever fails to advance (e.g. internal list
+    // corruption, library bug). 32 leaves headroom for a bug-tolerant pass.
+    constexpr uint8_t MAX_FETCH_ITERATIONS = 32;
     esp_now_peer_info_t peer;
-    while (esp_now_fetch_peer(true, &peer) == ESP_OK) {
+    uint8_t iter = 0;
+    while (iter++ < MAX_FETCH_ITERATIONS &&
+           esp_now_fetch_peer(true, &peer) == ESP_OK) {
         esp_now_del_peer(peer.peer_addr);
+    }
+    if (iter >= MAX_FETCH_ITERATIONS) {
+        LOG_W(TAG, "clearAllPeers hit iteration cap (%d)", MAX_FETCH_ITERATIONS);
     }
 
     // Re-add broadcast peer
@@ -597,7 +606,13 @@ void EspNowManager::onDataSent(const uint8_t* mac, esp_now_send_status_t status)
 }
 
 void EspNowManager::onDataRecv(const uint8_t* mac, const uint8_t* data, int len) {
-    xSemaphoreTake(_mutex, portMAX_DELAY);
+    // Bounded mutex wait: this fires from the WiFi RX task. portMAX_DELAY
+    // would deadlock if any other task holds the mutex indefinitely.
+    // 50ms is generous for the dedup/ack bookkeeping we protect.
+    if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
+        LOG_W(TAG, "RX mutex contention - dropping packet");
+        return;
+    }
     if (len < (int)sizeof(MessageHeader)) {
         xSemaphoreGive(_mutex);
         return;

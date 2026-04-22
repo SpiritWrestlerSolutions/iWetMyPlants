@@ -44,7 +44,9 @@ bool WatchdogManager::begin(uint32_t timeout_sec) {
 }
 
 void WatchdogManager::feed() {
-    if (!_initialized || !_enabled) {
+    if (!_initialized || !_enabled || _changing_timeout) {
+        // Skip feeding while setTimeout() is mid-deinit/reinit; the WDT
+        // is briefly unregistered and esp_task_wdt_reset() would fail.
         return;
     }
 
@@ -95,6 +97,12 @@ void WatchdogManager::setTimeout(uint32_t timeout_sec) {
         return;
     }
 
+    // Block feed() during the deinit/reinit window. Without this guard
+    // a feed() call from another task (or an ISR-driven timer) racing
+    // setTimeout() would call esp_task_wdt_reset() against an
+    // unregistered task and fault.
+    _changing_timeout = true;
+
     // To change timeout, we need to deinit and reinit
     // First remove our task
     esp_task_wdt_delete(NULL);
@@ -114,6 +122,8 @@ void WatchdogManager::setTimeout(uint32_t timeout_sec) {
         _initialized = false;
         _enabled = false;
     }
+
+    _changing_timeout = false;
 }
 
 uint32_t WatchdogManager::timeSinceLastFeed() const {

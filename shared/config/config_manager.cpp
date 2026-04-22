@@ -184,10 +184,18 @@ bool ConfigManager::eraseAll() {
 }
 
 // ============ Section Accessors ============
+//
+// Out-of-range accessors return a zeroed static dummy (per-accessor) so
+// that callers don't crash, but the dummy is re-zeroed on every invalid
+// call. Without that, two bad indices to the same accessor would share
+// the previous caller's writes through the dummy. Always log: an
+// out-of-range access is a callsite bug worth surfacing.
 
 const MoistureSensorConfig& ConfigManager::getMoistureSensor(uint8_t index) const {
     static MoistureSensorConfig dummy;
     if (index >= IWMP_MAX_SENSORS) {
+        LOG_E(TAG, "getMoistureSensor: invalid index %u (max %u)", index, IWMP_MAX_SENSORS - 1);
+        memset(&dummy, 0, sizeof(dummy));
         return dummy;
     }
     return _config.moisture_sensors[index];
@@ -196,6 +204,8 @@ const MoistureSensorConfig& ConfigManager::getMoistureSensor(uint8_t index) cons
 MoistureSensorConfig& ConfigManager::getMoistureSensorMutable(uint8_t index) {
     static MoistureSensorConfig dummy;
     if (index >= IWMP_MAX_SENSORS) {
+        LOG_E(TAG, "getMoistureSensorMutable: invalid index %u (max %u)", index, IWMP_MAX_SENSORS - 1);
+        memset(&dummy, 0, sizeof(dummy));
         return dummy;
     }
     return _config.moisture_sensors[index];
@@ -204,6 +214,8 @@ MoistureSensorConfig& ConfigManager::getMoistureSensorMutable(uint8_t index) {
 const RelayConfig& ConfigManager::getRelay(uint8_t index) const {
     static RelayConfig dummy;
     if (index >= IWMP_MAX_RELAYS) {
+        LOG_E(TAG, "getRelay: invalid index %u (max %u)", index, IWMP_MAX_RELAYS - 1);
+        memset(&dummy, 0, sizeof(dummy));
         return dummy;
     }
     return _config.relays[index];
@@ -212,6 +224,8 @@ const RelayConfig& ConfigManager::getRelay(uint8_t index) const {
 RelayConfig& ConfigManager::getRelayMutable(uint8_t index) {
     static RelayConfig dummy;
     if (index >= IWMP_MAX_RELAYS) {
+        LOG_E(TAG, "getRelayMutable: invalid index %u (max %u)", index, IWMP_MAX_RELAYS - 1);
+        memset(&dummy, 0, sizeof(dummy));
         return dummy;
     }
     return _config.relays[index];
@@ -220,6 +234,8 @@ RelayConfig& ConfigManager::getRelayMutable(uint8_t index) {
 const SensorRelayBinding& ConfigManager::getBinding(uint8_t index) const {
     static SensorRelayBinding dummy;
     if (index >= IWMP_MAX_BINDINGS) {
+        LOG_E(TAG, "getBinding: invalid index %u (max %u)", index, IWMP_MAX_BINDINGS - 1);
+        memset(&dummy, 0, sizeof(dummy));
         return dummy;
     }
     return _config.bindings[index];
@@ -228,6 +244,8 @@ const SensorRelayBinding& ConfigManager::getBinding(uint8_t index) const {
 SensorRelayBinding& ConfigManager::getBindingMutable(uint8_t index) {
     static SensorRelayBinding dummy;
     if (index >= IWMP_MAX_BINDINGS) {
+        LOG_E(TAG, "getBindingMutable: invalid index %u (max %u)", index, IWMP_MAX_BINDINGS - 1);
+        memset(&dummy, 0, sizeof(dummy));
         return dummy;
     }
     return _config.bindings[index];

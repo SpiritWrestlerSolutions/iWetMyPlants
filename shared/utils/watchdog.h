@@ -58,6 +58,7 @@ public:
 private:
     bool _enabled = false;
     bool _initialized = false;
+    bool _changing_timeout = false;
     uint32_t _timeout_sec = 30;
     uint32_t _last_feed_time = 0;
 };
