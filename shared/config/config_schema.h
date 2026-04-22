@@ -200,4 +200,20 @@ inline bool isConfigValid(const DeviceConfig& config) {
     return config.magic == CONFIG_MAGIC;
 }
 
+// Compile-time guard against silent ABI drift on the packed structs.
+// If a future toolchain (or a field-list edit) shifts these sizes the
+// NVS layout would change underneath in-field devices and they'd all
+// fall back to defaults on next boot. Update intentionally if the
+// struct changes — and bump CONFIG_VERSION so existing devices know
+// to migrate.
+static_assert(sizeof(DeviceIdentity)            ==  62,  "DeviceIdentity size changed - NVS layout broken");
+static_assert(sizeof(WifiConfig)                == 156,  "WifiConfig size changed - NVS layout broken");
+static_assert(sizeof(MqttConfig)                == 267,  "MqttConfig size changed - NVS layout broken");
+static_assert(sizeof(EspNowConfig)              ==  43,  "EspNowConfig size changed - NVS layout broken");
+static_assert(sizeof(MoistureSensorConfig)      ==  46,  "MoistureSensorConfig size changed - NVS layout broken");
+static_assert(sizeof(EnvironmentalSensorConfig) ==   6,  "EnvironmentalSensorConfig size changed - NVS layout broken");
+static_assert(sizeof(RelayConfig)               ==  47,  "RelayConfig size changed - NVS layout broken");
+static_assert(sizeof(SensorRelayBinding)        ==  16,  "SensorRelayBinding size changed - NVS layout broken");
+static_assert(sizeof(PowerConfig)               ==  19,  "PowerConfig size changed - NVS layout broken");
+
 } // namespace iwmp

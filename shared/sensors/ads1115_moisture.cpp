@@ -94,12 +94,13 @@ uint16_t Ads1115Input::readRaw() {
         return 0;
     }
 
-    // Skip reads if device has gone unresponsive (avoid I2C timeout spam)
+    // Skip reads if this channel has gone unresponsive (avoid I2C
+    // timeout spam). Re-probe every REPROBE_SKIP_CALLS calls. Counter
+    // is per-instance so one bad channel doesn't delay re-probes on
+    // healthy siblings sharing the same chip address.
     if (_consecutive_errors >= MAX_CONSECUTIVE_ERRORS) {
-        // Periodic re-probe every ~50 calls (let other code keep running)
-        static uint16_t skip_count = 0;
-        if (++skip_count < 50) return 0;
-        skip_count = 0;
+        if (++_reprobe_skip < REPROBE_SKIP_CALLS) return 0;
+        _reprobe_skip = 0;
 
         uint8_t idx = _address - 0x48;
         SemaphoreHandle_t mtx = (idx < 4) ? s_i2c_mutex[idx] : nullptr;

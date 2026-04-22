@@ -260,11 +260,17 @@ void RelayManager::enforceTimeout(uint8_t index) {
 void RelayManager::setRelayPin(uint8_t index, bool state) {
     uint8_t pin = _configs[index].gpio_pin;
     bool active_low = _configs[index].active_low;
+    bool pin_state = active_low ? !state : state;  // invert for active-low
 
-    // Invert for active-low relays
-    bool pin_state = active_low ? !state : state;
-
+    // Skip the write if the pin already holds this value. update() runs
+    // every loop tick and would otherwise flicker the line at framework
+    // speed, which can heat some relay modules and is wasted I/O.
+    if (_pin_state_cached[index] && _last_pin_state[index] == pin_state) {
+        return;
+    }
     digitalWrite(pin, pin_state ? HIGH : LOW);
+    _last_pin_state[index]    = pin_state;
+    _pin_state_cached[index]  = true;
     LOG_D(TAG, "Relay %d GPIO %d set to %d (active_low=%d)",
           index, pin, pin_state, active_low);
 }

@@ -242,12 +242,17 @@ void WifiManager::loop() {
 }
 
 String WifiManager::getMacAddress() const {
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    char mac_str[13];
-    snprintf(mac_str, sizeof(mac_str), "%02X%02X%02X%02X%02X%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    return String(mac_str);
+    // efuse MAC is fixed for the lifetime of the process — read once
+    // and cache. The string was being rebuilt on every call (often in
+    // log lines on hot paths).
+    static char cached[13] = {0};
+    if (cached[0] == '\0') {
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(cached, sizeof(cached), "%02X%02X%02X%02X%02X%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+    return String(cached);
 }
 
 int16_t WifiManager::scanNetworks() {

@@ -214,7 +214,12 @@ private:
     uint32_t getConversionDelayUs() const;
 
     uint8_t _consecutive_errors = 0;
+    // Per-instance re-probe skip counter. Was previously a static
+    // local in readRaw() — that meant a single failing channel would
+    // delay re-probes on every other channel sharing the same readRaw.
+    uint16_t _reprobe_skip = 0;
     static constexpr uint8_t MAX_CONSECUTIVE_ERRORS = 5;
+    static constexpr uint16_t REPROBE_SKIP_CALLS  = 50;
 
     // Shared ADC instances (one per I2C address)
     static Adafruit_ADS1115 s_adc_instances[4];

@@ -126,6 +126,11 @@ private:
     RelayConfig _configs[IWMP_MAX_RELAYS];
     RelayState _states[IWMP_MAX_RELAYS];
     uint8_t _count = 0;
+    // Cache of the last value written to each GPIO so update() can skip
+    // redundant digitalWrite calls (otherwise the pin re-asserts every
+    // loop tick).
+    bool _last_pin_state[IWMP_MAX_RELAYS] = {false};
+    bool _pin_state_cached[IWMP_MAX_RELAYS] = {false};
 
     /**
      * @brief Check all safety conditions
