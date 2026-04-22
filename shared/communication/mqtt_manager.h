@@ -321,7 +321,7 @@ private:
                        size_t len, size_t index, size_t total);
 
     // Discovery payload builders
-    String buildDeviceJson() const;
+    void addDeviceBlock(JsonObject parent) const;
     String buildMoistureDiscoveryPayload(uint8_t sensor_index, const char* sensor_name) const;
     String buildTemperatureDiscoveryPayload() const;
     String buildHumidityDiscoveryPayload() const;

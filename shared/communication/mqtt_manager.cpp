@@ -349,10 +349,13 @@ void MqttManager::publishState(const SensorReadings& readings) {
     doc["uptime"] = readings.uptime_sec;
     doc["free_heap"] = readings.free_heap;
 
-    String payload;
-    serializeJson(doc, payload);
-
-    publish(_state_topic.c_str(), payload.c_str(), false);
+    char buf[1024];
+    size_t n = serializeJson(doc, buf, sizeof(buf));
+    if (n >= sizeof(buf)) {
+        LOG_W(TAG, "publishState payload truncated (%u >= %u)", (unsigned)n, (unsigned)sizeof(buf));
+        return;
+    }
+    publish(_state_topic.c_str(), buf, false);
 }
 
 void MqttManager::publishAvailability(bool online) {
@@ -380,10 +383,9 @@ void MqttManager::publishMoistureReading(uint8_t sensor_index, uint16_t raw_valu
     snprintf(key, sizeof(key), "moisture_%d_raw", sensor_index + 1);
     doc[key] = raw_value;
 
-    String payload;
-    serializeJson(doc, payload);
-
-    publish(_state_topic.c_str(), payload.c_str(), false);
+    char buf[128];
+    serializeJson(doc, buf, sizeof(buf));
+    publish(_state_topic.c_str(), buf, false);
 }
 
 void MqttManager::publishEnvironmentalReading(float temperature_c, float humidity_percent) {
@@ -391,14 +393,11 @@ void MqttManager::publishEnvironmentalReading(float temperature_c, float humidit
         return;
     }
 
-    JsonDocument doc;
-    doc["temperature"] = serialized(String(temperature_c, 1));
-    doc["humidity"] = serialized(String(humidity_percent, 1));
-
-    String payload;
-    serializeJson(doc, payload);
-
-    publish(_state_topic.c_str(), payload.c_str(), false);
+    char buf[64];
+    snprintf(buf, sizeof(buf),
+             "{\"temperature\":%.1f,\"humidity\":%.1f}",
+             temperature_c, humidity_percent);
+    publish(_state_topic.c_str(), buf, false);
 }
 
 void MqttManager::publishBatteryStatus(uint16_t voltage_mv, uint8_t percent, bool charging) {
@@ -406,15 +405,11 @@ void MqttManager::publishBatteryStatus(uint16_t voltage_mv, uint8_t percent, boo
         return;
     }
 
-    JsonDocument doc;
-    doc["battery"] = percent;
-    doc["battery_voltage"] = serialized(String(voltage_mv / 1000.0f, 2));
-    doc["battery_charging"] = charging;
-
-    String payload;
-    serializeJson(doc, payload);
-
-    publish(_state_topic.c_str(), payload.c_str(), false);
+    char buf[96];
+    snprintf(buf, sizeof(buf),
+             "{\"battery\":%u,\"battery_voltage\":%.2f,\"battery_charging\":%s}",
+             percent, voltage_mv / 1000.0f, charging ? "true" : "false");
+    publish(_state_topic.c_str(), buf, false);
 }
 
 void MqttManager::publishRelayState(uint8_t relay_index, bool state) {
@@ -422,15 +417,10 @@ void MqttManager::publishRelayState(uint8_t relay_index, bool state) {
         return;
     }
 
-    JsonDocument doc;
-    char key[16];
-    snprintf(key, sizeof(key), "relay_%d", relay_index + 1);
-    doc[key] = state ? "ON" : "OFF";
-
-    String payload;
-    serializeJson(doc, payload);
-
-    publish(_state_topic.c_str(), payload.c_str(), false);
+    char buf[40];
+    snprintf(buf, sizeof(buf), "{\"relay_%u\":\"%s\"}",
+             (unsigned)(relay_index + 1), state ? "ON" : "OFF");
+    publish(_state_topic.c_str(), buf, false);
 }
 
 // ============ Raw Publish/Subscribe ============
@@ -578,23 +568,45 @@ void MqttManager::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 
 void MqttManager::onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties,
                                  size_t len, size_t index, size_t total) {
-    // Null-terminate payload
-    char* payload_str = new char[len + 1];
+    // AsyncMqttClient delivers payload as char* with explicit length, NOT
+    // null-terminated. Most relay/control payloads are tiny (a few dozen
+    // bytes) so use a stack buffer; fall back to heap only for the rare
+    // large message. Avoids per-message heap fragmentation.
+    constexpr size_t STACK_BUF = 256;
+    char stack_buf[STACK_BUF];
+    char* payload_str = stack_buf;
+    char* heap_buf = nullptr;
+
+    if (len + 1 > STACK_BUF) {
+        heap_buf = new (std::nothrow) char[len + 1];
+        if (!heap_buf) {
+            LOG_W(TAG, "MQTT payload too big and heap alloc failed (len=%u)", (unsigned)len);
+            return;
+        }
+        payload_str = heap_buf;
+    }
+
     memcpy(payload_str, payload, len);
     payload_str[len] = '\0';
 
-    // Check if it's a relay command
-    String topic_str(topic);
-    if (topic_str.startsWith(_command_base_topic + "/relay_")) {
+    // Relay command? Topic prefix check uses _command_base_topic directly
+    // (no temporary String + concat).
+    const size_t base_len = _command_base_topic.length();
+    if (len <= total &&  // sanity (single-fragment messages)
+        strncmp(topic, _command_base_topic.c_str(), base_len) == 0 &&
+        strncmp(topic + base_len, "/relay_", 7) == 0) {
+        // handleRelayCommand still wants a String for substring math.
+        String topic_str(topic);
         handleRelayCommand(topic_str, payload_str, len);
     }
 
-    // User callback
     if (_message_callback) {
         _message_callback(topic, payload_str, len);
     }
 
-    delete[] payload_str;
+    if (heap_buf) {
+        delete[] heap_buf;
+    }
 }
 
 void MqttManager::buildTopics() {
@@ -670,24 +682,16 @@ String MqttManager::getUniqueId(const char* entity) const {
     return String(unique_id);
 }
 
-String MqttManager::buildDeviceJson() const {
-    JsonDocument device;
-
-    // Identifiers
+void MqttManager::addDeviceBlock(JsonObject parent) const {
+    JsonObject device = parent["dev"].to<JsonObject>();
     JsonArray identifiers = device["ids"].to<JsonArray>();
     char id[32];
     snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
     identifiers.add(id);
-
-    // Device info
     device["name"] = _identity.device_name;
     device["mdl"] = getModelName();
     device["mf"] = HA_MANUFACTURER;
     device["sw"] = _identity.firmware_version;
-
-    String result;
-    serializeJson(device, result);
-    return result;
 }
 
 String MqttManager::buildMoistureDiscoveryPayload(uint8_t sensor_index, const char* sensor_name) const {
@@ -712,16 +716,7 @@ String MqttManager::buildMoistureDiscoveryPayload(uint8_t sensor_index, const ch
     doc["stat_cla"] = "measurement";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
@@ -740,16 +735,7 @@ String MqttManager::buildTemperatureDiscoveryPayload() const {
     doc["stat_cla"] = "measurement";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
@@ -768,16 +754,7 @@ String MqttManager::buildHumidityDiscoveryPayload() const {
     doc["stat_cla"] = "measurement";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
@@ -808,16 +785,7 @@ String MqttManager::buildRelayDiscoveryPayload(uint8_t relay_index, const char* 
     doc["pl_off"] = "OFF";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
@@ -836,16 +804,7 @@ String MqttManager::buildBatteryDiscoveryPayload() const {
     doc["stat_cla"] = "measurement";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
@@ -864,16 +823,7 @@ String MqttManager::buildBatteryVoltageDiscoveryPayload() const {
     doc["stat_cla"] = "measurement";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
@@ -893,16 +843,7 @@ String MqttManager::buildRssiDiscoveryPayload() const {
     doc["ent_cat"] = "diagnostic";
     doc["avty_t"] = _availability_topic;
 
-    // Device info
-    JsonObject device = doc["dev"].to<JsonObject>();
-    JsonArray identifiers = device["ids"].to<JsonArray>();
-    char id[32];
-    snprintf(id, sizeof(id), "iwmp_%s", _identity.device_id);
-    identifiers.add(id);
-    device["name"] = _identity.device_name;
-    device["mdl"] = getModelName();
-    device["mf"] = HA_MANUFACTURER;
-    device["sw"] = _identity.firmware_version;
+    addDeviceBlock(doc.as<JsonObject>());
 
     String result;
     serializeJson(doc, result);
