@@ -275,23 +275,22 @@ try{
 }catch(e){msg('Error: '+e.message,false)}
 }
 
+function nlMsg(text){var l=$('nl');while(l.firstChild)l.removeChild(l.firstChild);var d=document.createElement('div');d.className='ni';d.textContent=text;l.appendChild(d)}
+function nlRender(networks){var l=$('nl');while(l.firstChild)l.removeChild(l.firstChild);networks.forEach(function(n){var d=document.createElement('div');d.className='ni';d.addEventListener('click',function(){$('ssid').value=n.ssid});var s=document.createElement('span');s.textContent=n.ssid;var r=document.createElement('span');r.className='r';r.textContent=n.rssi+'dBm';d.appendChild(s);d.appendChild(r);l.appendChild(d)})}
 async function scan(){
- $('nl').style.display='block';$('nl').innerHTML='<div class="ni">Scanning...</div>';
+ $('nl').style.display='block';nlMsg('Scanning...');
  try{await fetch('/api/wifi/networks');
   for(var i=0;i<10;i++){
    await new Promise(r=>setTimeout(r,1500));
    var d=await(await fetch('/api/wifi/networks')).json();
    if(!d.scanning){
-    if(d.networks&&d.networks.length){
-     $('nl').innerHTML=d.networks.map(n=>
-      '<div class="ni" onclick="$(\'ssid\').value=\''+n.ssid.replace(/'/g,"\\'")+'\'"><span>'+n.ssid+'</span><span class="r">'+n.rssi+'dBm</span></div>'
-     ).join('');
-    }else{$('nl').innerHTML='<div class="ni">No networks found</div>'}
+    if(d.networks&&d.networks.length){nlRender(d.networks)}
+    else{nlMsg('No networks found')}
     return;
    }
   }
-  $('nl').innerHTML='<div class="ni">Scan timeout</div>';
- }catch(e){$('nl').innerHTML='<div class="ni">Scan error</div>'}
+  nlMsg('Scan timeout');
+ }catch(e){nlMsg('Scan error')}
 }
 
 async function saveWifi(){

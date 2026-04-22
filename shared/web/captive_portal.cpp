@@ -5,6 +5,7 @@
 
 #include "captive_portal.h"
 #include <WiFi.h>
+#include <ArduinoJson.h>
 #include "../utils/logger.h"
 
 namespace iwmp {
@@ -279,30 +280,39 @@ void CaptivePortal::handleCredentials(AsyncWebServerRequest* request) {
 }
 
 void CaptivePortal::handleScanNetworks(AsyncWebServerRequest* request) {
-    String json = "[";
-
     int n = WiFi.scanComplete();
+
+    // Use ArduinoJson for output so SSID strings are JSON-escaped
+    // properly. Manual concat against unsanitised SSIDs corrupts the
+    // JSON if a network name contains a quote or backslash and is the
+    // server side of an XSS chain when consumed by innerHTML.
+    JsonDocument doc;
+
     if (n == WIFI_SCAN_FAILED) {
         WiFi.scanNetworks(true);  // Start async scan
-        json = "{\"scanning\":true}";
+        doc["scanning"] = true;
     } else if (n == WIFI_SCAN_RUNNING) {
-        json = "{\"scanning\":true}";
+        doc["scanning"] = true;
     } else {
+        JsonArray arr = doc.to<JsonArray>();
         for (int i = 0; i < n; i++) {
-            if (i > 0) {
-                json += ",";
-            }
-            json += "{";
-            json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
-            json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
-            json += "\"secure\":" + String(WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
-            json += "}";
+            JsonObject net = arr.add<JsonObject>();
+            net["ssid"]   = WiFi.SSID(i);  // ArduinoJson handles escaping
+            net["rssi"]   = WiFi.RSSI(i);
+            net["secure"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
         }
-        json += "]";
         WiFi.scanDelete();
     }
 
-    request->send(200, "application/json", json);
+    char buf[2048];
+    size_t len = serializeJson(doc, buf, sizeof(buf));
+    if (len >= sizeof(buf)) {
+        // Too many networks to fit in buffer — return what serialised
+        // (truncated JSON would be invalid). Cap at empty array.
+        request->send(200, "application/json", "[]");
+        return;
+    }
+    request->send(200, "application/json", buf);
 }
 
 // ============ HTML Content ============
@@ -333,7 +343,7 @@ const char* CaptivePortal::getPortalHtml() {
             </div>
 
             <div class="form-group">
-                <label for="password">Password</label>
+                <label for="password">Password <span id="pwdHint" class="hint"></span></label>
                 <input type="password" id="password" name="password" maxlength="64">
             </div>
 
@@ -344,42 +354,126 @@ const char* CaptivePortal::getPortalHtml() {
     </div>
 
     <script>
+        // Build network list with DOM APIs so SSID strings (server-controlled
+        // but ultimately attacker-controlled at the radio layer) cannot
+        // execute as HTML. innerHTML interpolation of WiFi.SSID() is XSS.
+        var scanAttempts = 0;
+        var MAX_SCAN_POLLS = 10;  // ~20 seconds at 2s interval
+
+        function rssiBars(r) {
+            if (r > -50) return 4;
+            if (r > -60) return 3;
+            if (r > -70) return 2;
+            return 1;
+        }
+
+        function rssiLabel(r) {
+            if (r > -50) return 'Excellent';
+            if (r > -60) return 'Good';
+            if (r > -70) return 'Fair';
+            return 'Weak';
+        }
+
+        function clearChildren(el) {
+            while (el.firstChild) el.removeChild(el.firstChild);
+        }
+
+        function makeRescanLink(text) {
+            var p = document.createElement('p');
+            var a = document.createElement('a');
+            a.href = '#';
+            a.textContent = text || 'Scan again';
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                scanAttempts = 0;
+                scanNetworks();
+            });
+            p.appendChild(a);
+            return p;
+        }
+
+        function renderNetworks(container, list) {
+            clearChildren(container);
+            if (!list.length) {
+                var p = document.createElement('p');
+                p.textContent = 'No networks found. ';
+                container.appendChild(p);
+                container.appendChild(makeRescanLink());
+                return;
+            }
+            var ul = document.createElement('ul');
+            ul.className = 'network-list';
+            list.forEach(function(net) {
+                var li = document.createElement('li');
+                li.title = (net.secure ? 'Secured' : 'Open') +
+                           ' · ' + rssiLabel(net.rssi) + ' (' + net.rssi + ' dBm)';
+                li.addEventListener('click', function() {
+                    selectNetwork(net.ssid, net.secure);
+                });
+
+                var ssid = document.createElement('span');
+                ssid.className = 'ssid';
+                ssid.textContent = net.ssid;  // safe: textContent escapes
+
+                var meta = document.createElement('span');
+                meta.className = 'meta';
+                meta.textContent = (net.secure ? '🔒 ' : '') +
+                                   '●'.repeat(rssiBars(net.rssi)) +
+                                   '○'.repeat(4 - rssiBars(net.rssi));
+
+                li.appendChild(ssid);
+                li.appendChild(meta);
+                ul.appendChild(li);
+            });
+            container.appendChild(ul);
+            container.appendChild(makeRescanLink());
+        }
+
         function scanNetworks() {
+            var container = document.getElementById('networks');
             fetch('/scan')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.scanning) {
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.scanning) {
+                        scanAttempts++;
+                        if (scanAttempts >= MAX_SCAN_POLLS) {
+                            clearChildren(container);
+                            var p = document.createElement('p');
+                            p.textContent = 'Scan timed out. ';
+                            container.appendChild(p);
+                            container.appendChild(makeRescanLink('Try again'));
+                            return;
+                        }
                         setTimeout(scanNetworks, 2000);
                         return;
                     }
-
-                    const container = document.getElementById('networks');
-                    if (!data.length) {
-                        container.innerHTML = '<p>No networks found. <a href="#" onclick="scanNetworks()">Scan again</a></p>';
-                        return;
-                    }
-
-                    let html = '<ul class="network-list">';
-                    data.forEach(net => {
-                        const icon = net.secure ? '&#128274;' : '';
-                        const bars = net.rssi > -50 ? 4 : net.rssi > -60 ? 3 : net.rssi > -70 ? 2 : 1;
-                        html += '<li onclick="selectNetwork(\'' + net.ssid.replace(/'/g, "\\'") + '\')">';
-                        html += '<span class="ssid">' + net.ssid + '</span>';
-                        html += '<span class="meta">' + icon + ' ' + '&#9679;'.repeat(bars) + '</span>';
-                        html += '</li>';
-                    });
-                    html += '</ul>';
-                    html += '<p><a href="#" onclick="scanNetworks()">Scan again</a></p>';
-                    container.innerHTML = html;
+                    scanAttempts = 0;
+                    renderNetworks(container, Array.isArray(data) ? data : []);
                 })
-                .catch(() => {
-                    setTimeout(scanNetworks, 3000);
+                .catch(function() {
+                    clearChildren(container);
+                    var p = document.createElement('p');
+                    p.textContent = 'Scan failed. ';
+                    container.appendChild(p);
+                    container.appendChild(makeRescanLink('Retry'));
                 });
         }
 
-        function selectNetwork(ssid) {
+        function selectNetwork(ssid, secure) {
             document.getElementById('ssid').value = ssid;
-            document.getElementById('password').focus();
+            var pwd = document.getElementById('password');
+            var hint = document.getElementById('pwdHint');
+            if (secure) {
+                pwd.disabled = false;
+                pwd.placeholder = '';
+                hint.textContent = '';
+                pwd.focus();
+            } else {
+                pwd.value = '';
+                pwd.disabled = true;
+                pwd.placeholder = 'Open network — leave blank';
+                hint.textContent = '(open network)';
+            }
         }
 
         scanNetworks();
@@ -515,6 +609,19 @@ button:hover {
     margin-top: 16px;
 }
 
+.hint {
+    color: #2d8f47;
+    font-size: 13px;
+    font-weight: normal;
+    margin-left: 6px;
+}
+
+input:disabled {
+    background: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+}
+
 a {
     color: #2d8f47;
 }
@@ -548,6 +655,7 @@ const char* CaptivePortal::getSuccessHtml() {
         }
         h1 { color: #1a5f2a; margin-bottom: 16px; }
         p { color: #666; line-height: 1.6; }
+        .countdown { font-size: 14px; color: #999; margin-top: 24px; }
         .spinner {
             width: 48px;
             height: 48px;
@@ -567,9 +675,26 @@ const char* CaptivePortal::getSuccessHtml() {
         <h1>Connecting...</h1>
         <div class="spinner"></div>
         <p>Attempting to connect to your WiFi network.</p>
-        <p>If successful, this access point will close and you can reconnect to your normal network.</p>
+        <p>If successful, this access point will close. Reconnect to your normal WiFi network and find the device on its new IP.</p>
         <p>If connection fails, the setup page will reappear.</p>
+        <p class="countdown" id="countdown">This page will close in 30s…</p>
     </div>
+    <script>
+        // Countdown helps users on phones that don't auto-dismiss the
+        // captive portal panel after the AP goes away.
+        var secs = 30;
+        var el = document.getElementById('countdown');
+        var t = setInterval(function() {
+            secs--;
+            if (secs <= 0) {
+                clearInterval(t);
+                el.textContent = 'You can close this page now.';
+                try { window.close(); } catch (e) {}
+                return;
+            }
+            el.textContent = 'This page will close in ' + secs + 's…';
+        }, 1000);
+    </script>
 </body>
 </html>
 )rawliteral";
