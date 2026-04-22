@@ -991,12 +991,31 @@ document.addEventListener('click', () => {
     guidesToggle.setAttribute('aria-expanded', false);
 });
 
+// Latest published version from version.json. Set after loadVersion()
+// resolves; used by the Ping handler to show ↑/↓/= against the
+// version reported by /api/system/info on the live device.
+let LATEST_VERSION = null;
+
+// Tag a device-reported version with how it compares against the
+// latest published build. Build-number suffix (e.g. "1.0.0+47") is
+// included in the lexical compare so newer builds of the same semver
+// still register as an upgrade. Falls back to bare "vX.Y.Z" when the
+// latest version isn't loaded yet.
+function versionTag(devVersion) {
+    if (!LATEST_VERSION) return `v${devVersion}`;
+    if (devVersion === LATEST_VERSION) return `v${devVersion} ✓ up to date`;
+    return (devVersion < LATEST_VERSION)
+        ? `v${devVersion} ↑ upgrade available`
+        : `v${devVersion} ↓ newer than published`;
+}
+
 (async function loadVersion() {
     try {
         const res = await fetch('version.json', { cache: 'no-cache' });
         if (!res.ok) return;
         const data = await res.json();
         if (data.version) {
+            LATEST_VERSION = data.version;
             document.getElementById('header-version').textContent = 'v' + data.version;
             document.getElementById('toggle-version').textContent  = 'v' + data.version;
         }
@@ -1235,7 +1254,7 @@ pingBtn.addEventListener('click', async () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const info = await res.json();
         const parts = [
-            info.version   ? `v${info.version}`             : null,
+            info.version   ? versionTag(info.version)       : null,
             info.device_id ? `ID\u00a0${info.device_id}`    : null,
             info.free_heap ? `Heap\u00a0${info.free_heap}B` : null,
         ].filter(Boolean).join('\u2002\u00b7\u2002');
