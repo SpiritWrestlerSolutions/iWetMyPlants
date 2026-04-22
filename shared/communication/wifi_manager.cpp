@@ -224,11 +224,18 @@ void WifiManager::loop() {
         }
     }
 
-    // Handle auto-reconnect
+    // Auto-reconnect with exponential backoff. _reconnect_attempts is
+    // reset to 0 in the STA_GOT_IP event handler.
     if (_state == WifiState::DISCONNECTED && strlen(_config.ssid) > 0) {
-        if ((millis() - _last_reconnect_attempt) > RECONNECT_INTERVAL_MS) {
+        uint32_t interval = RECONNECT_INTERVAL_MS << _reconnect_attempts;
+        if (interval > RECONNECT_INTERVAL_MAX_MS || _reconnect_attempts >= 6) {
+            interval = RECONNECT_INTERVAL_MAX_MS;
+        }
+        if ((millis() - _last_reconnect_attempt) > interval) {
             _last_reconnect_attempt = millis();
-            LOG_I(TAG, "Attempting reconnect...");
+            _reconnect_attempts++;
+            LOG_I(TAG, "Reconnect attempt %u (next interval %lus)",
+                  _reconnect_attempts, (unsigned long)(interval / 1000));
             connect();
         }
     }
@@ -295,6 +302,7 @@ void WifiManager::onWiFiEvent(WiFiEvent_t event) {
         case ARDUINO_EVENT_WIFI_STA_GOT_IP:
             s_instance->_state = WifiState::CONNECTED;
             s_instance->_last_reconnect_attempt = 0;
+            s_instance->_reconnect_attempts = 0;
             LOG_I(TAG, "Connected! IP: %s", WiFi.localIP().toString().c_str());
             s_instance->syncEspNowChannel();
             if (s_instance->_connect_callback) {

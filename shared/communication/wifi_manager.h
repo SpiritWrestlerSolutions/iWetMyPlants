@@ -156,8 +156,11 @@ private:
 
     uint32_t _connect_start_time = 0;
     uint32_t _last_reconnect_attempt = 0;
+    uint8_t _reconnect_attempts = 0;
     static constexpr uint32_t CONNECT_TIMEOUT_MS = 15000;
+    // Exponential reconnect: 5s, 10s, 20s, 40s, then 60s ceiling.
     static constexpr uint32_t RECONNECT_INTERVAL_MS = 5000;
+    static constexpr uint32_t RECONNECT_INTERVAL_MAX_MS = 60000;
 
     /**
      * @brief Handle DNS requests for captive portal

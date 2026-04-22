@@ -23,8 +23,11 @@ namespace iwmp {
 
 // MQTT configuration constants
 static constexpr uint16_t MQTT_DEFAULT_PORT = 1883;
+// Exponential reconnect: 5s, 10s, 20s, 40s, then 60s ceiling. We never
+// give up — a broker that's been down for hours should still recover
+// when it comes back, and the cost of a 60s retry is trivial.
 static constexpr uint32_t MQTT_RECONNECT_INTERVAL_MS = 5000;
-static constexpr uint8_t MQTT_MAX_RECONNECT_ATTEMPTS = 10;
+static constexpr uint32_t MQTT_RECONNECT_INTERVAL_MAX_MS = 60000;
 static constexpr uint8_t MQTT_DEFAULT_QOS = 1;
 static constexpr size_t MQTT_JSON_BUFFER_SIZE = 1024;
 

@@ -156,18 +156,22 @@ void MqttManager::loop() {
         return;
     }
 
-    // Handle reconnection
+    // Reconnect with exponential backoff (no give-up). Interval doubles
+    // per attempt and saturates at MQTT_RECONNECT_INTERVAL_MAX_MS.
+    // _reconnect_attempts is reset to 0 on successful connect.
     if (!isConnected() && !_connecting && WiFi.isConnected()) {
         uint32_t now = millis();
-        if ((now - _last_reconnect_attempt) >= MQTT_RECONNECT_INTERVAL_MS) {
+        uint32_t interval = MQTT_RECONNECT_INTERVAL_MS << _reconnect_attempts;
+        if (interval > MQTT_RECONNECT_INTERVAL_MAX_MS ||
+            _reconnect_attempts >= 6 /* prevent shift overflow */) {
+            interval = MQTT_RECONNECT_INTERVAL_MAX_MS;
+        }
+        if ((now - _last_reconnect_attempt) >= interval) {
             _last_reconnect_attempt = now;
-
-            if (_reconnect_attempts < MQTT_MAX_RECONNECT_ATTEMPTS) {
-                _reconnect_attempts++;
-                LOG_D(TAG, "Reconnect attempt %d/%d",
-                              _reconnect_attempts, MQTT_MAX_RECONNECT_ATTEMPTS);
-                connect();
-            }
+            _reconnect_attempts++;
+            LOG_D(TAG, "Reconnect attempt %u (next interval %lus)",
+                  _reconnect_attempts, (unsigned long)(interval / 1000));
+            connect();
         }
     }
 }

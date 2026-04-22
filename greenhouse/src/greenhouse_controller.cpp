@@ -338,16 +338,9 @@ void GreenhouseController::handleOperationalState() {
     _relays.update();
 
     if (Mqtt.isInitialized()) {
+        // MqttManager::loop() now handles reconnection with exponential
+        // backoff internally; no need for an external retry loop here.
         Mqtt.loop();
-
-        if (!Mqtt.isConnected() && WiFiMgr.isConnected()) {
-            static uint32_t last_reconnect_attempt = 0;
-            if ((now - last_reconnect_attempt) > 10000) {
-                LOG_I(TAG, "Attempting MQTT reconnect");
-                Mqtt.connect();
-                last_reconnect_attempt = now;
-            }
-        }
     }
 
     if (EspNow.isInitialized()) {
