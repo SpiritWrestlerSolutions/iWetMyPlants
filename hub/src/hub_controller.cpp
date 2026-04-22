@@ -7,6 +7,7 @@
 #include "config_manager.h"
 #include "logger.h"
 #include "api_endpoints.h"
+#include "admin_auth.h"
 #include "web_server.h"
 #include "calibration_manager.h"
 #include "sensor_interface.h"
@@ -793,6 +794,7 @@ void HubController::setupWebRoutes() {
     Web.addRouteWithBody("/api/calibration/start", HTTP_POST,
         [](AsyncWebServerRequest* request) {},
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            if (!AdminAuth.require(request)) return;
             JsonDocument doc;
             if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>() || !doc["point"].is<const char*>()) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
@@ -823,6 +825,7 @@ void HubController::setupWebRoutes() {
     Web.addRouteWithBody("/api/calibration/save", HTTP_POST,
         [](AsyncWebServerRequest* request) {},
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            if (!AdminAuth.require(request)) return;
             JsonDocument doc;
             if (deserializeJson(doc, data, len) || !doc["sensor"].is<uint8_t>()) {
                 request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
@@ -837,6 +840,7 @@ void HubController::setupWebRoutes() {
 
     // POST /api/sensors/poll — force an immediate sensor reading cycle
     Web.addRoute("/api/sensors/poll", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        if (!AdminAuth.require(request)) return;
         _poll_force = true;
         ApiEndpoints::sendSuccess(request, "Poll started");
     });
@@ -852,6 +856,7 @@ void HubController::setupWebRoutes() {
     Web.addRouteWithBody("/api/sensors/poll_interval", HTTP_POST,
         [this](AsyncWebServerRequest* request) { /* handled in body callback */ },
         [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t) {
+            if (!AdminAuth.require(request)) return;
             JsonDocument doc;
             DeserializationError err = deserializeJson(doc, data, len);
             if (err || !doc["interval_sec"].is<uint32_t>()) {

@@ -11,6 +11,7 @@
 #include <nvs_flash.h>
 #include <esp_mac.h>
 #include "remote_controller.h"
+#include "admin_auth.h"
 #include "config_manager.h"
 #include "defaults.h"
 #include "logger.h"
@@ -78,6 +79,9 @@ void setup() {
     } else {
         LOG_E(TAG, "Config initialization failed!");
     }
+
+    // Load admin password (if set) — gates writes on the local web admin.
+    AdminAuth.begin();
 
     // Initialize remote controller
     // This handles wake reason detection and decides on operating mode

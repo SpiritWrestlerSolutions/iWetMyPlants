@@ -7,6 +7,7 @@
 
 #include "remote_web.h"
 #include "remote_controller.h"
+#include "admin_auth.h"
 #include "config_manager.h"
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
@@ -431,6 +432,7 @@ void RemoteWeb::registerRoutes() {
         [](AsyncWebServerRequest* r) {},
         nullptr,
         [self](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+            if (!AdminAuth.require(r)) return;
             self->handlePostWifiConnect(r, d, l, i, t);
         }
     );
@@ -443,6 +445,7 @@ void RemoteWeb::registerRoutes() {
         [](AsyncWebServerRequest* r) {},
         nullptr,
         [self](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+            if (!AdminAuth.require(r)) return;
             self->handlePostMqttConfig(r, d, l, i, t);
         }
     );
@@ -451,6 +454,7 @@ void RemoteWeb::registerRoutes() {
         [](AsyncWebServerRequest* r) {},
         nullptr,
         [self](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+            if (!AdminAuth.require(r)) return;
             self->handlePostSensorConfig(r, d, l, i, t);
         }
     );
@@ -459,15 +463,18 @@ void RemoteWeb::registerRoutes() {
         [](AsyncWebServerRequest* r) {},
         nullptr,
         [self](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+            if (!AdminAuth.require(r)) return;
             self->handlePostModeConfig(r, d, l, i, t);
         }
     );
 
     _server->on("/api/system/reboot", HTTP_POST, [self](AsyncWebServerRequest* r) {
+        if (!AdminAuth.require(r)) return;
         self->handlePostReboot(r);
     });
 
     _server->on("/api/system/return-mode", HTTP_POST, [self](AsyncWebServerRequest* r) {
+        if (!AdminAuth.require(r)) return;
         self->handlePostReturnMode(r);
     });
 
@@ -475,6 +482,7 @@ void RemoteWeb::registerRoutes() {
         [](AsyncWebServerRequest* r) {},
         nullptr,
         [self](AsyncWebServerRequest* r, uint8_t* d, size_t l, size_t i, size_t t) {
+            if (!AdminAuth.require(r)) return;
             self->handlePostBatteryConfig(r, d, l, i, t);
         }
     );

@@ -4,6 +4,7 @@
  */
 
 #include "greenhouse_controller.h"
+#include "admin_auth.h"
 #include "config_manager.h"
 #include "logger.h"
 #include "watchdog.h"
@@ -497,6 +498,7 @@ void GreenhouseController::setupWebRoutes() {
 
     // Relay control endpoint
     Web.addRoute("/relay/{index}", HTTP_POST, [this](AsyncWebServerRequest* req) {
+        if (!AdminAuth.require(req)) return;
         String indexStr = req->pathArg(0);
         uint8_t index = indexStr.toInt();
 
@@ -521,6 +523,7 @@ void GreenhouseController::setupWebRoutes() {
 
     // Emergency stop
     Web.addRoute("/emergency-stop", HTTP_POST, [this](AsyncWebServerRequest* req) {
+        if (!AdminAuth.require(req)) return;
         emergencyStop();
         req->send(200, "application/json", "{\"success\":true}");
     });

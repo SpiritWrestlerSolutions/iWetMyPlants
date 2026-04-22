@@ -4,6 +4,7 @@
  */
 
 #include "ota_manager.h"
+#include "admin_auth.h"
 #include "logger.h"
 
 namespace iwmp {
@@ -21,7 +22,12 @@ void OtaManager::begin(AsyncWebServer* server, const char* path) {
 
     reset();
 
-    // Set up OTA upload endpoint
+    // Set up OTA upload endpoint. Auth is checked on the very first
+    // chunk so we don't buffer or write a megabyte of un-auth'd firmware
+    // before rejecting it. If auth fails, we mark the upload ERROR and
+    // every subsequent chunk no-ops (handleUploadData gates on
+    // _progress.state == RECEIVING). The completion handler then
+    // reports the failure as a 400.
     server->on(path, HTTP_POST,
         // Request handler (called when upload completes)
         [this](AsyncWebServerRequest* request) {
@@ -44,6 +50,13 @@ void OtaManager::begin(AsyncWebServer* server, const char* path) {
                uint8_t* data, size_t len, bool final) {
 
             if (index == 0) {
+                // Auth gate: require() sends a 401 itself when failing.
+                // We poison the OTA state so subsequent chunks are
+                // ignored and the completion handler reports an error.
+                if (!AdminAuth.require(request)) {
+                    setError("Unauthorized");
+                    return;
+                }
                 // First chunk - start update
                 size_t total = request->contentLength();
                 handleUploadStart(total);
@@ -53,7 +66,7 @@ void OtaManager::begin(AsyncWebServer* server, const char* path) {
                 handleUploadData(data, len, index, request->contentLength());
             }
 
-            if (final) {
+            if (final && _progress.state == OtaState::RECEIVING) {
                 handleUploadEnd(true);
             }
         }

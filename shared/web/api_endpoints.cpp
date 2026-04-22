@@ -8,10 +8,12 @@
 #include "../config/config_manager.h"
 #include "../utils/ota_manager.h"
 #include "../utils/error_tracker.h"
+#include "../utils/admin_auth.h"
 #include <WiFi.h>
 #include <esp_system.h>
 #include <esp_chip_info.h>
 #include <esp_mac.h>
+#include <ArduinoJson.h>
 
 namespace iwmp {
 
@@ -144,9 +146,62 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
 
     // Clear errors endpoint
     server.on("/api/system/errors/clear", HTTP_POST, [](AsyncWebServerRequest* request) {
+        if (!AdminAuth.require(request)) return;
         Errors.clear();
         sendSuccess(request, "Error history cleared");
     });
+
+    // ============ Admin Auth ============
+    // Status endpoint is public (the UI needs to know whether to show
+    // "Set password" or "Change password" before the user has authenticated).
+    server.on("/api/auth/status", HTTP_GET, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+        doc["enabled"] = AdminAuth.isEnabled();
+        sendJson(request, doc);
+    });
+
+    // POST /api/auth/password — set, change, or clear the admin password.
+    // Body: { "current": "<current-or-empty>", "new": "<new-or-empty>" }
+    // - If auth is currently disabled, "current" is ignored (anyone on the
+    //   LAN can set the initial password — this is the same trust model
+    //   as flashing the device in the first place).
+    // - If auth is currently enabled, the request must already pass
+    //   AdminAuth.require() (Basic-Auth header) AND supply the matching
+    //   "current" password in the body. This belt-and-braces avoids
+    //   accidentally re-using a cached browser session to change the pw.
+    // - Empty "new" clears the password (returns to open mode).
+    server.on("/api/auth/password", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
+            if (index != 0 || index + len != total) return;  // single-shot bodies only
+            if (AdminAuth.isEnabled() && !AdminAuth.require(request)) return;
+
+            JsonDocument doc;
+            DeserializationError err = deserializeJson(doc, data, len);
+            if (err) {
+                sendError(request, 400, "Invalid JSON");
+                return;
+            }
+            String current  = doc["current"] | "";
+            String new_pw   = doc["new"]     | "";
+
+            if (AdminAuth.isEnabled() && !AdminAuth.verify(current)) {
+                sendError(request, 403, "Current password incorrect");
+                return;
+            }
+            if (!AdminAuth.set(new_pw)) {
+                sendError(request, 500, "Failed to save password");
+                return;
+            }
+            JsonDocument resp;
+            resp["success"] = true;
+            resp["enabled"] = AdminAuth.isEnabled();
+            resp["message"] = new_pw.isEmpty() ? "Auth disabled" : "Password updated";
+            sendJson(request, resp);
+        }
+    );
 
     // Sensors
     server.on("/api/sensors", HTTP_GET, handleGetSensors);
@@ -190,6 +245,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
 
     for (int i = 0; i < 16; i++) {
         server.on(cal_dry_paths[i], HTTP_POST, [](AsyncWebServerRequest* request) {
+            if (!AdminAuth.require(request)) return;
             String url = request->url();
             // Extract sensor index from URL like /api/sensors/X/calibrate/dry
             int start = 13; // length of "/api/sensors/"
@@ -208,6 +264,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         });
 
         server.on(cal_wet_paths[i], HTTP_POST, [](AsyncWebServerRequest* request) {
+            if (!AdminAuth.require(request)) return;
             String url = request->url();
             int start = 13;
             int end = url.indexOf('/', start);
@@ -233,6 +290,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             handlePostConfigSection(request, "wifi", data, len);
         }
     );
@@ -244,6 +302,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             handlePostConfigSection(request, "mqtt", data, len);
         }
     );
@@ -258,6 +317,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         },
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             // Only process when we have all the data
             if (index + len == total) {
                 handlePostConfigSection(request, "sensors", data, len);
@@ -272,6 +332,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             // Only process when we have all the data
             if (index + len == total) {
                 handlePostConfigSection(request, "relays", data, len);
@@ -286,6 +347,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             handlePostConfigSection(request, "espnow", data, len);
         }
     );
@@ -297,6 +359,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             handlePostConfigSection(request, "env_sensor", data, len);
         }
     );
@@ -308,6 +371,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             handlePostConfig(request, data, len);
         }
     );
@@ -325,6 +389,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
             [](AsyncWebServerRequest* request) {},
             nullptr,
             [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
                 String url = request->url();
                 uint8_t relay_idx = url.substring(url.lastIndexOf('/') + 1).toInt();
                 handlePostRelay(request, relay_idx, data, len);
@@ -345,6 +410,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     for (int i = 0; i < 16; i++) {
         server.on(device_paths[i], HTTP_DELETE,
             [](AsyncWebServerRequest* request) {
+                if (!AdminAuth.require(request)) return;
                 String url = request->url();
                 uint8_t device_idx = url.substring(url.lastIndexOf('/') + 1).toInt();
                 handleDeleteDevice(request, device_idx);
@@ -359,6 +425,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         [](AsyncWebServerRequest* request) {},
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            if (!AdminAuth.require(request)) return;
             handlePostWifiConnect(request, data, len);
         }
     );
@@ -398,6 +465,7 @@ void ApiEndpoints::handleGetSystemInfo(AsyncWebServerRequest* request) {
 }
 
 void ApiEndpoints::handlePostReboot(AsyncWebServerRequest* request) {
+    if (!AdminAuth.require(request)) return;
     sendSuccess(request, "Rebooting...");
 
     // Delay reboot to allow response to be sent

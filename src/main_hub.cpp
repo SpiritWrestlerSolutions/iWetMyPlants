@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "hub_controller.h"
+#include "admin_auth.h"
 #include "config_manager.h"
 #include "logger.h"
 #include "watchdog.h"
@@ -53,6 +54,10 @@ void setup() {
     } else {
         LOG_E(TAG, "Config manager initialization failed!");
     }
+
+    // Load admin password (if set) — gates writes on the web admin surface.
+    // Empty/no password = open mode (backward compat for in-field devices).
+    AdminAuth.begin();
 
     // Initialize primary I2C bus (ADS1115 @ 0x48, SHT sensors, etc.)
     Wire.begin(hub_pins::I2C_SDA, hub_pins::I2C_SCL);
