@@ -886,8 +886,20 @@ void HubController::setupWebRoutes() {
         ApiEndpoints::sendJson(request, doc);
     });
 
-    // GET /api/espnow/export � export hub config so a Remote can import it in one step
+    // GET /api/espnow/export — export hub config so a Remote can import
+    // it in one step. The WiFi password is omitted by default to avoid
+    // leaking it to drive-by readers (the response goes over plaintext
+    // HTTP on the LAN); callers that genuinely need the password to
+    // bootstrap a Remote must opt in with ?include_secrets=1, which is
+    // an explicit user action via the dashboard's "Copy Remote Config"
+    // button. Pairing-card callers (Devices page) read only ip/mac.
     Web.addRoute("/api/espnow/export", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        bool include_secrets = false;
+        if (request->hasParam("include_secrets")) {
+            String v = request->getParam("include_secrets")->value();
+            include_secrets = (v == "1" || v == "true");
+        }
+
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_WIFI_STA);
         char mac_str[18];
@@ -899,7 +911,9 @@ void HubController::setupWebRoutes() {
         doc["hub_mac"]       = mac_str;
         doc["channel"]       = (int)WiFiMgr.getCurrentChannel();
         doc["wifi_ssid"]     = wifi_cfg.ssid;
-        doc["wifi_password"] = wifi_cfg.password;
+        if (include_secrets) {
+            doc["wifi_password"] = wifi_cfg.password;
+        }
         doc["hub_ip"]        = WiFi.localIP().toString();
 
         String json;

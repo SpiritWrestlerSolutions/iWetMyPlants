@@ -890,7 +890,7 @@ $('btn-copy-espnow')?.addEventListener('click',async()=>{
   const btn=$('btn-copy-espnow'),ta=$('espnow-json');
   btn.disabled=true;btn.textContent='Fetching...';
   try{
-    const d=await fetchJson('/api/espnow/export');
+    const d=await fetchJson('/api/espnow/export?include_secrets=1');
     const j=JSON.stringify(d);
     ta.value=j;ta.style.display='block';
     try{
