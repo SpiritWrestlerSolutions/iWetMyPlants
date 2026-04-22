@@ -742,20 +742,25 @@ void HubController::setupWebRoutes() {
         }
     );
 
-    ApiEndpoints::onSensorData([this](uint8_t index, uint16_t& raw, uint8_t& percent) -> bool {
-        // Return cached values (populated by background doBackgroundPoll())
-        if (index < IWMP_MAX_SENSORS && _sensor_cache[index].valid) {
+    ApiEndpoints::onSensorData([this](uint8_t index, uint16_t& raw, uint8_t& percent,
+                                       bool& valid, uint32_t& age_sec) -> bool {
+        if (index >= IWMP_MAX_SENSORS) return false;
+        // Sensor doesn't exist at this index → return false; UI omits the entry.
+        if (!_local_sensors[index] && !_sensor_cache[index].valid) return false;
+
+        if (_sensor_cache[index].valid) {
             raw     = _sensor_cache[index].raw;
             percent = _sensor_cache[index].percent;
-            return true;
-        }
-        // Sensor exists but cache not yet populated — return last_raw as a hint
-        if (index < IWMP_MAX_SENSORS && _local_sensors[index] && _local_sensors[index]->isReady()) {
+            valid   = true;
+            age_sec = (millis() - _sensor_cache[index].last_read_ms) / 1000UL;
+        } else {
+            // Sensor object exists but background poll hasn't completed yet.
+            valid   = false;
             raw     = 0;
             percent = 0;
-            return true;
+            age_sec = 0;
         }
-        return false;
+        return true;
     });
 
     // Sensor status callback for hardware connection info

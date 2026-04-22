@@ -25,13 +25,22 @@ class WebServer;
 /**
  * @brief Sensor data provider callback
  *
- * Called when API needs current sensor readings.
- * @param index Sensor index (0-based)
- * @param raw Output: raw ADC value
- * @param percent Output: moisture percentage
- * @return true if sensor exists and reading is valid
+ * Called when the API needs current sensor readings. The valid out-param
+ * lets the API distinguish "sensor exists but cache is empty" from
+ * "reading happens to be 0%" — the former should render as "—" in the
+ * UI, the latter as "0%".
+ * @param index    Sensor index (0-based)
+ * @param raw      Output: raw ADC value (only meaningful when valid==true)
+ * @param percent  Output: moisture % (only meaningful when valid==true)
+ * @param valid    Output: true if a reading is currently cached
+ * @param age_sec  Output: seconds since the last reading (0 when !valid)
+ * @return true if the sensor object exists at this index
  */
-using SensorDataCallback = std::function<bool(uint8_t index, uint16_t& raw, uint8_t& percent)>;
+using SensorDataCallback = std::function<bool(uint8_t index,
+                                              uint16_t& raw,
+                                              uint8_t& percent,
+                                              bool& valid,
+                                              uint32_t& age_sec)>;
 
 /**
  * @brief Extended sensor status info

@@ -884,13 +884,20 @@ void ApiEndpoints::buildSensorJson(JsonObject& obj, uint8_t index) {
     obj["wet_value"] = sensor_cfg.wet_value;
     obj["warning_level"] = sensor_cfg.warning_level;
 
-    // Get live reading if callback available
+    // Get live reading if callback available. Always emit `valid` so the
+    // UI can distinguish "no reading yet" (—) from "reading is 0%".
     if (s_sensor_callback) {
         uint16_t raw = 0;
         uint8_t percent = 0;
-        if (s_sensor_callback(index, raw, percent)) {
-            obj["raw"] = raw;
-            obj["percent"] = percent;
+        bool valid = false;
+        uint32_t age_sec = 0;
+        if (s_sensor_callback(index, raw, percent, valid, age_sec)) {
+            obj["valid"] = valid;
+            if (valid) {
+                obj["raw"]     = raw;
+                obj["percent"] = percent;
+                obj["age_sec"] = age_sec;
+            }
         }
     }
 
