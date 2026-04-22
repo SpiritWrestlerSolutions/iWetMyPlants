@@ -11,8 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Security
+- **Admin authentication on the web admin surface.** Single-password HTTP Basic Auth gates every state-changing endpoint (relay control, settings writes, OTA, calibration, factory reset, device unpair, sensor poll, password export with secrets). Read-only routes (status, sensor readings, devices, environment, config-GET, dashboard HTML) stay public so the device remains browseable without prompting. New "Security" card on the Settings page (Hub & Greenhouse share the page) for setting / changing / clearing the password. Backward-compatible: empty password = open mode, so existing in-field devices keep working until the user opts in. The installer's OTA flow now retries with `Authorization: Basic` when the device returns 401. Recovery from a forgotten password requires a USB re-flash (which clears NVS).
 - **Captive portal: WiFi SSID XSS hardened.** Network-list JS rewritten to use DOM construction (`createElement` + `textContent`) instead of `innerHTML` interpolation, blocking malicious AP names from executing as HTML. Applied to the Hub/Greenhouse WiFi settings page, the Remote captive portal, and the dormant `CaptivePortal` class.
-- **`/api/espnow/export` no longer leaks the WiFi password by default.** The dashboard's "Copy Remote Config" button now opts in via `?include_secrets=1`; drive-by readers get only Hub IP/MAC/SSID. The new Devices-page pairing card never requests the secret.
+- **`/api/espnow/export` no longer leaks the WiFi password by default.** The dashboard's "Copy Remote Config" button opts in via `?include_secrets=1`; drive-by readers get only Hub IP/MAC/SSID. With auth enabled, the secrets path additionally requires admin credentials. The new Devices-page pairing card never requests the secret.
 
 ### Stability
 - **MQTT and WiFi reconnect with exponential backoff (5/10/20/40/60s ceiling), no give-up.** Replaces the previous 10-attempt cap on MQTT and the flat 5s WiFi retry — a broker or AP that comes back after hours of downtime now recovers automatically.

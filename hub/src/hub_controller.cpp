@@ -904,6 +904,11 @@ void HubController::setupWebRoutes() {
             String v = request->getParam("include_secrets")->value();
             include_secrets = (v == "1" || v == "true");
         }
+        // Secrets only ever leave the device behind admin auth. Without
+        // include_secrets the response is harmless LAN-discoverable
+        // metadata (IP, MAC, SSID, channel) and stays public so the
+        // Devices-page pairing card doesn't prompt.
+        if (include_secrets && !AdminAuth.require(request)) return;
 
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_WIFI_STA);

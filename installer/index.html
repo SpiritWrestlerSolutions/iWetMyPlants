@@ -1286,43 +1286,74 @@ otaBtn.addEventListener('click', async () => {
             return;
         }
     }
+    // Cross-origin XHR doesn't get the browser's auto auth-prompt, so
+    // we send Basic-Auth manually. Try unauthenticated first; on 401,
+    // prompt the user for the admin password and retry once.
+    function uploadFirmware(password) {
+        return new Promise((resolve, reject) => {
+            const form = new FormData();
+            form.append('firmware', file);
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${target.origin}/api/system/ota`);
+            xhr.timeout = 120_000;
+            if (password != null) {
+                // Empty username \u2014 the device's AdminAuth realm is password-only.
+                xhr.setRequestHeader('Authorization', 'Basic ' + btoa(':' + password));
+            }
+            xhr.upload.onprogress = (e) => {
+                if (!e.lengthComputable) return;
+                const pct = Math.round((e.loaded / e.total) * 100);
+                setProgress(pct, pct < 100 ? 'Uploading firmware\u2026' : 'Flashing\u2026');
+            };
+            xhr.onload = () => resolve(xhr);
+            xhr.onerror = () => reject(new Error('network'));
+            xhr.ontimeout = () => reject(new Error('timeout'));
+            xhr.send(form);
+        });
+    }
+
     setMsg(otaStatus, '', '');
     setProgress(0, 'Uploading firmware\u2026');
     otaBtn.disabled  = true;
     pingBtn.disabled = true;
-    const form = new FormData();
-    form.append('firmware', file);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${target.origin}/api/system/ota`);
-    xhr.timeout = 120_000;
-    xhr.upload.onprogress = (e) => {
-        if (!e.lengthComputable) return;
-        const pct = Math.round((e.loaded / e.total) * 100);
-        setProgress(pct, pct < 100 ? 'Uploading firmware\u2026' : 'Flashing\u2026');
-    };
-    xhr.onload = () => {
-        setProgress(-1);
-        if (xhr.status === 200) {
-            setMsg(otaStatus, 'Firmware updated successfully. Device is rebooting\u2026', 'success');
-        } else {
-            setMsg(otaStatus, `Update failed (HTTP\u00a0${xhr.status}): ${xhr.responseText}`, 'error');
+
+    let xhr;
+    try {
+        xhr = await uploadFirmware(null);
+        if (xhr.status === 401) {
+            setProgress(-1);
+            const pwd = prompt('This device requires an admin password.\nLeave blank to cancel.');
+            if (!pwd) {
+                setMsg(otaStatus, 'Update cancelled.', 'warning');
+                otaBtn.disabled  = false;
+                pingBtn.disabled = false;
+                return;
+            }
+            setProgress(0, 'Retrying with credentials\u2026');
+            xhr = await uploadFirmware(pwd);
         }
-        otaBtn.disabled  = false;
-        pingBtn.disabled = false;
-    };
-    xhr.onerror = () => {
+    } catch (err) {
         setProgress(-1);
-        setMsg(otaStatus, describeXhrFailure(target), 'warning');
+        setMsg(otaStatus,
+            err.message === 'timeout'
+                ? 'Request timed out. Check the device IP and network connection.'
+                : describeXhrFailure(target),
+            err.message === 'timeout' ? 'error' : 'warning');
         otaBtn.disabled  = false;
         pingBtn.disabled = false;
-    };
-    xhr.ontimeout = () => {
-        setProgress(-1);
-        setMsg(otaStatus, 'Request timed out. Check the device IP and network connection.', 'error');
-        otaBtn.disabled  = false;
-        pingBtn.disabled = false;
-    };
-    xhr.send(form);
+        return;
+    }
+
+    setProgress(-1);
+    if (xhr.status === 200) {
+        setMsg(otaStatus, 'Firmware updated successfully. Device is rebooting\u2026', 'success');
+    } else if (xhr.status === 401) {
+        setMsg(otaStatus, 'Authentication failed. Wrong password.', 'error');
+    } else {
+        setMsg(otaStatus, `Update failed (HTTP\u00a0${xhr.status}): ${xhr.responseText}`, 'error');
+    }
+    otaBtn.disabled  = false;
+    pingBtn.disabled = false;
 });
 
 const FORMSPREE_ID = 'xojkpwpe';
