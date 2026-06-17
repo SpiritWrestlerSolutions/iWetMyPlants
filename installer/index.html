@@ -807,7 +807,7 @@
         </ol>
 
         <div class="browser-note" id="serial-warning" style="display:none;">
-            Web Serial is not supported in this browser. Please use <strong>Chrome</strong> or <strong>Edge</strong> (desktop) to flash via USB.
+            This browser can't flash over USB. Please use <strong>Chrome</strong> or <strong>Edge</strong> on a desktop computer.
         </div>
 
         <esp-web-install-button id="install-btn" manifest="install/hub.json">
@@ -835,7 +835,7 @@
         <p>For devices already running iWetMyPlants firmware and connected to your network. Enter the device IP, select a firmware file, then click <strong>Update Firmware</strong>.</p>
 
         <div class="browser-note" style="margin-bottom:1rem;">
-            <strong>Note:</strong> Your browser sends this request directly to the device on your local network. For this to work from an external page, the device firmware must allow CORS on <code>/api/system/info</code> and <code>/api/system/ota</code>. If this page is loaded over HTTPS, some browsers may also block plain HTTP access to local IPs. If that happens, use the device's own Settings page at its local IP instead.
+            <strong>Note:</strong> Your browser talks straight to the device on your local network. Some browsers block a page like this from reaching a device at a different address. If the update fails here, open the device's own Settings page at its IP and upload the firmware there instead.
         </div>
 
         <div class="form-group">
@@ -1212,7 +1212,7 @@ function describeFetchError(error, target) {
     const constraint = getNetworkConstraintMessage(target);
     if (constraint && (error.name === 'TypeError' || error.name === 'AbortError')) return constraint;
     if (error.name === 'AbortError') return 'Request timed out. Check the device IP and confirm that the device is awake and on the same network.';
-    if (error instanceof TypeError) return 'The browser blocked the request or could not reach the device. Check the IP, confirm the device exposes CORS headers, and try from the device\'s own local web page if needed.';
+    if (error instanceof TypeError) return 'The browser blocked the request or couldn\'t reach the device. Check the IP, and if it keeps failing, open the device\'s own web page at its IP instead.';
     return error.message || 'Unexpected network error.';
 }
 
@@ -1256,7 +1256,7 @@ pingBtn.addEventListener('click', async () => {
         const parts = [
             info.version   ? versionTag(info.version)       : null,
             info.device_id ? `ID\u00a0${info.device_id}`    : null,
-            info.free_heap ? `Heap\u00a0${info.free_heap}B` : null,
+            info.free_heap ? `Free\u00a0${Math.round(info.free_heap / 1024)}\u00a0KB` : null,
         ].filter(Boolean).join('\u2002\u00b7\u2002');
         setMsg(otaStatus, `Connected\u2014 ${parts || 'device online'}`, 'success');
     } catch (e) {
@@ -1350,7 +1350,8 @@ otaBtn.addEventListener('click', async () => {
     } else if (xhr.status === 401) {
         setMsg(otaStatus, 'Authentication failed. Wrong password.', 'error');
     } else {
-        setMsg(otaStatus, `Update failed (HTTP\u00a0${xhr.status}): ${xhr.responseText}`, 'error');
+        console.warn('OTA update failed:', xhr.status, xhr.responseText);
+        setMsg(otaStatus, `Update failed (error ${xhr.status}). The firmware file may be wrong for this device, or the device rejected it. Double-check you picked the right device type, then try again.`, 'error');
     }
     otaBtn.disabled  = false;
     pingBtn.disabled = false;

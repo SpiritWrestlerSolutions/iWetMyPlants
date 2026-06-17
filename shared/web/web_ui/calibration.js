@@ -24,6 +24,7 @@ const App = {
             pct: document.getElementById('percent-value'),
             canvas: document.getElementById('reading-graph'),
             btnSave: document.getElementById('btn-save'),
+            hint: document.getElementById('cal-hint'),
             drySaved: document.getElementById('dry-saved'),
             wetSaved: document.getElementById('wet-saved')
         };
@@ -45,7 +46,9 @@ const App = {
                 `<option value="${i}">${s.name || 'Sensor ' + (i+1)}</option>`).join('');
             this.connect();
         } catch (e) {
-            this.updateStatus('API Error', 'error');
+            this.updateStatus('Load failed', 'error');
+            this.dom.select.innerHTML =
+                '<option value="" disabled selected>Couldn’t load sensors — power on the device and reload</option>';
         }
     },
 
@@ -116,8 +119,17 @@ const App = {
         this.sendSignal(`set_${type}`);
         
         // Validation: Dry must be > Wet for most soil sensors (capacitive)
-        const isValid = this.points.dry && this.points.wet && this.points.dry > this.points.wet;
+        const bothSet = this.points.dry != null && this.points.wet != null;
+        const isValid = bothSet && this.points.dry > this.points.wet;
         this.dom.btnSave.disabled = !isValid;
+
+        // Don't leave Save silently greyed — tell the user why when both points are set but reversed.
+        if (bothSet && !isValid) {
+            this.dom.hint.textContent = 'Dry reading should be higher than wet. Re-take the dry point in open air and the wet point in water.';
+            this.dom.hint.style.display = '';
+        } else {
+            this.dom.hint.style.display = 'none';
+        }
     },
 
     sendSignal(type) {
