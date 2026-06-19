@@ -191,15 +191,6 @@ void MqttManager::publishDiscovery() {
     // Device-type specific discovery will be called by the device controller
 }
 
-void MqttManager::removeDiscovery() {
-    // Remove the entities that publishDiscovery() registers directly.
-    // Per-device entities (moisture, relay, etc.) must be removed by the
-    // device controller via the individual remove* methods.
-    if (!isConnected() || !_config.ha_discovery_enabled) return;
-    String topic = getDiscoveryTopic("sensor", "rssi");
-    publish(topic.c_str(), "", true);
-}
-
 void MqttManager::removeMoistureDiscovery(uint8_t sensor_index) {
     if (!isConnected() || !_config.ha_discovery_enabled) return;
     char entity_id[32];
@@ -275,22 +266,6 @@ void MqttManager::publishRelayDiscovery(uint8_t relay_index, const char* relay_n
     String topic = getDiscoveryTopic("switch", entity);
     String payload = buildRelayDiscoveryPayload(relay_index, relay_name);
 
-    publish(topic.c_str(), payload.c_str(), true);
-}
-
-void MqttManager::publishBatteryDiscovery() {
-    if (!isConnected() || !_config.ha_discovery_enabled) {
-        return;
-    }
-
-    // Battery percentage
-    String topic = getDiscoveryTopic("sensor", "battery");
-    String payload = buildBatteryDiscoveryPayload();
-    publish(topic.c_str(), payload.c_str(), true);
-
-    // Battery voltage
-    topic = getDiscoveryTopic("sensor", "battery_voltage");
-    payload = buildBatteryVoltageDiscoveryPayload();
     publish(topic.c_str(), payload.c_str(), true);
 }
 
@@ -466,27 +441,11 @@ void MqttManager::onDisconnect(MqttDisconnectCallback callback) {
     _disconnect_callback = callback;
 }
 
-void MqttManager::onMessage(MqttMessageCallback callback) {
-    _message_callback = callback;
-}
-
 void MqttManager::onRelayCommand(RelayCommandCallback callback) {
     _relay_callback = callback;
 }
 
 // ============ Topic Builders ============
-
-String MqttManager::getStateTopic() const {
-    return _state_topic;
-}
-
-String MqttManager::getAvailabilityTopic() const {
-    return _availability_topic;
-}
-
-String MqttManager::getCommandTopic(const char* entity) const {
-    return _command_base_topic + "/" + entity;
-}
 
 String MqttManager::getDiscoveryTopic(const char* component, const char* entity) const {
     // Format: homeassistant/<component>/iwmp_<device_id>/<entity>/config
@@ -539,31 +498,7 @@ void MqttManager::onMqttConnect(bool session_present) {
 void MqttManager::onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
     _connecting = false;
 
-    const char* reason_str = "Unknown";
-    switch (reason) {
-        case AsyncMqttClientDisconnectReason::TCP_DISCONNECTED:
-            reason_str = "TCP disconnected";
-            break;
-        case AsyncMqttClientDisconnectReason::MQTT_UNACCEPTABLE_PROTOCOL_VERSION:
-            reason_str = "Unacceptable protocol version";
-            break;
-        case AsyncMqttClientDisconnectReason::MQTT_IDENTIFIER_REJECTED:
-            reason_str = "Identifier rejected";
-            break;
-        case AsyncMqttClientDisconnectReason::MQTT_SERVER_UNAVAILABLE:
-            reason_str = "Server unavailable";
-            break;
-        case AsyncMqttClientDisconnectReason::MQTT_MALFORMED_CREDENTIALS:
-            reason_str = "Malformed credentials";
-            break;
-        case AsyncMqttClientDisconnectReason::MQTT_NOT_AUTHORIZED:
-            reason_str = "Not authorized";
-            break;
-        default:
-            break;
-    }
-
-    LOG_W(TAG, "Disconnected: %s", reason_str);
+    LOG_W(TAG, "MQTT disconnected: reason %d", (int)reason);
 
     if (_disconnect_callback) {
         _disconnect_callback(reason);
@@ -602,10 +537,6 @@ void MqttManager::onMqttMessage(char* topic, char* payload, AsyncMqttClientMessa
         // handleRelayCommand still wants a String for substring math.
         String topic_str(topic);
         handleRelayCommand(topic_str, payload_str, len);
-    }
-
-    if (_message_callback) {
-        _message_callback(topic, payload_str, len);
     }
 
     if (heap_buf) {
@@ -787,44 +718,6 @@ String MqttManager::buildRelayDiscoveryPayload(uint8_t relay_index, const char* 
 
     doc["pl_on"] = "ON";
     doc["pl_off"] = "OFF";
-    doc["avty_t"] = _availability_topic;
-
-    addDeviceBlock(doc.as<JsonObject>());
-
-    String result;
-    serializeJson(doc, result);
-    return result;
-}
-
-String MqttManager::buildBatteryDiscoveryPayload() const {
-    JsonDocument doc;
-
-    doc["name"] = String(_identity.device_name) + " Battery";
-    doc["uniq_id"] = getUniqueId("battery");
-    doc["stat_t"] = _state_topic;
-    doc["val_tpl"] = "{{ value_json.battery }}";
-    doc["unit_of_meas"] = "%";
-    doc["dev_cla"] = "battery";
-    doc["stat_cla"] = "measurement";
-    doc["avty_t"] = _availability_topic;
-
-    addDeviceBlock(doc.as<JsonObject>());
-
-    String result;
-    serializeJson(doc, result);
-    return result;
-}
-
-String MqttManager::buildBatteryVoltageDiscoveryPayload() const {
-    JsonDocument doc;
-
-    doc["name"] = String(_identity.device_name) + " Battery Voltage";
-    doc["uniq_id"] = getUniqueId("battery_voltage");
-    doc["stat_t"] = _state_topic;
-    doc["val_tpl"] = "{{ value_json.battery_voltage }}";
-    doc["unit_of_meas"] = "V";
-    doc["dev_cla"] = "voltage";
-    doc["stat_cla"] = "measurement";
     doc["avty_t"] = _availability_topic;
 
     addDeviceBlock(doc.as<JsonObject>());

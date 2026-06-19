@@ -73,59 +73,6 @@ public:
      */
     const char* getTypeName() const override { return "MUX_CD74HC4067"; }
 
-    // ============ Multiplexer Specific ============
-
-    /**
-     * @brief Set active channel
-     * @param channel Channel number (0-15)
-     */
-    void setChannel(uint8_t channel);
-
-    /**
-     * @brief Get current channel
-     */
-    uint8_t getChannel() const { return _channel; }
-
-    /**
-     * @brief Get signal pin
-     */
-    uint8_t getSignalPin() const { return _sig_pin; }
-
-    /**
-     * @brief Enable multiplexer
-     */
-    void enable();
-
-    /**
-     * @brief Disable multiplexer (high impedance output)
-     */
-    void disable();
-
-    /**
-     * @brief Check if enabled
-     */
-    bool isEnabled() const { return _enabled; }
-
-    /**
-     * @brief Read from specific channel
-     * @param channel Channel to read (0-15)
-     * @return ADC value
-     */
-    uint16_t readChannel(uint8_t channel);
-
-    /**
-     * @brief Scan all channels
-     * @param values Array to store values (must be at least 16 elements)
-     * @param delay_us Delay between readings in microseconds
-     */
-    void scanAllChannels(uint16_t* values, uint16_t delay_us = MUX_SETTLE_TIME_US);
-
-    /**
-     * @brief Set settling time after channel switch
-     * @param time_us Time in microseconds
-     */
-    void setSettleTime(uint16_t time_us);
-
 private:
     uint8_t _sig_pin;
     uint8_t _select_pins[4];
@@ -139,38 +86,6 @@ private:
      * @brief Apply channel selection to GPIO pins
      */
     void applyChannelSelection();
-};
-
-/**
- * @brief Shared multiplexer manager for multiple sensors on same mux
- *
- * When multiple MoistureSensors use the same physical multiplexer,
- * this class ensures proper channel switching and prevents conflicts.
- */
-class MuxManager {
-public:
-    /**
-     * @brief Register a multiplexer
-     * @param mux Pointer to MuxInput
-     * @param id Unique ID for this mux
-     */
-    static void registerMux(MuxInput* mux, uint8_t id);
-
-    /**
-     * @brief Get registered multiplexer by ID
-     */
-    static MuxInput* getMux(uint8_t id);
-
-    /**
-     * @brief Read from specific mux and channel
-     * @param mux_id Multiplexer ID
-     * @param channel Channel number
-     * @return ADC value
-     */
-    static uint16_t read(uint8_t mux_id, uint8_t channel);
-
-private:
-    static MuxInput* s_mux_instances[4];
 };
 
 } // namespace iwmp

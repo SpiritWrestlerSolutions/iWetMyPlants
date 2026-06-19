@@ -10,8 +10,7 @@ namespace iwmp {
 
 static constexpr const char* TAG = "Relay";
 
-// Static empty config for invalid indices
-static const RelayConfig s_empty_config = {};
+// Static empty state for invalid indices
 static const RelayState s_empty_state = {};
 
 void RelayManager::begin(const RelayConfig configs[], uint8_t count) {
@@ -119,18 +118,6 @@ bool RelayManager::turnOff(uint8_t index) {
     return true;
 }
 
-bool RelayManager::toggle(uint8_t index) {
-    if (index >= _count) {
-        return false;
-    }
-
-    if (_states[index].current_state) {
-        return turnOff(index);
-    } else {
-        return turnOn(index);
-    }
-}
-
 bool RelayManager::isOn(uint8_t index) const {
     if (index >= _count) {
         return false;
@@ -143,13 +130,6 @@ const RelayState& RelayManager::getState(uint8_t index) const {
         return s_empty_state;
     }
     return _states[index];
-}
-
-const RelayConfig& RelayManager::getConfig(uint8_t index) const {
-    if (index >= _count) {
-        return s_empty_config;
-    }
-    return _configs[index];
 }
 
 void RelayManager::update() {
@@ -197,17 +177,6 @@ void RelayManager::clearLockout(uint8_t index) {
     _states[index].locked_out = false;
     _states[index].lockout_reason[0] = '\0';
     LOG_I(TAG, "Relay %d lockout cleared", index);
-}
-
-bool RelayManager::isLockedOut(uint8_t index) const {
-    if (index >= _count) return true;  // Invalid index is effectively locked
-    return _states[index].locked_out;
-}
-
-const char* RelayManager::getLockoutReason(uint8_t index) const {
-    if (index >= _count) return "Invalid index";
-    if (!_states[index].locked_out) return "";
-    return _states[index].lockout_reason;
 }
 
 bool RelayManager::checkSafetyConditions(uint8_t index) {

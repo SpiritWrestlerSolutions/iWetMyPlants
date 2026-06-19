@@ -46,12 +46,9 @@ using SensorDataCallback = std::function<bool(uint8_t index,
  * @brief Extended sensor status info
  */
 struct SensorStatusInfo {
-    bool exists;            // Sensor object exists
     bool ready;             // Sensor is ready to read
     bool hw_connected;      // Hardware is connected (I2C device responding, etc.)
     const char* input_type; // Input type name ("ADS1115", "DirectADC", etc.)
-    uint8_t ads_channel;    // ADS1115 channel (0-3), only valid for ADS1115
-    uint8_t ads_address;    // ADS1115 I2C address, only valid for ADS1115
 };
 
 /**
@@ -219,15 +216,9 @@ private:
     static void handleGetSystemInfo(AsyncWebServerRequest* request);
     static void handlePostReboot(AsyncWebServerRequest* request);
 
-    // OTA
-    static void handlePostOta(AsyncWebServerRequest* request);
-    static void handleOtaUpload(AsyncWebServerRequest* request, const String& filename,
-                                size_t index, uint8_t* data, size_t len, bool final);
-
     // Sensors
     static void handleGetSensors(AsyncWebServerRequest* request);
     static void handleGetSensor(AsyncWebServerRequest* request, uint8_t index);
-    static void handlePostCalibrate(AsyncWebServerRequest* request, uint8_t index);
 
     // Configuration
     static void handleGetConfig(AsyncWebServerRequest* request);

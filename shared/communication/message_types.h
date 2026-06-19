@@ -22,8 +22,6 @@ static constexpr size_t ESPNOW_MAX_PAYLOAD = 250;
 namespace MsgFlags {
     static constexpr uint8_t REQUIRES_ACK = 0x01;   // Sender expects ACK
     static constexpr uint8_t IS_RETRY = 0x02;       // This is a retry
-    static constexpr uint8_t ENCRYPTED = 0x04;      // Payload is encrypted
-    static constexpr uint8_t FRAGMENTED = 0x08;     // Part of fragmented message
 }
 
 // Device capability flags (for AnnounceMsg)
@@ -64,20 +62,6 @@ enum class MessageType : uint8_t {
     // ============ Acknowledgments (0xF0-0xFF) ============
     ACK = 0xF0,                     // Positive acknowledgment
     NACK = 0xF1                     // Negative acknowledgment (with reason)
-};
-
-/**
- * @brief NACK reason codes
- */
-enum class NackReason : uint8_t {
-    UNKNOWN = 0x00,
-    INVALID_MESSAGE = 0x01,
-    NOT_PAIRED = 0x02,
-    BUSY = 0x03,
-    INVALID_COMMAND = 0x04,
-    RELAY_LOCKED = 0x05,
-    SENSOR_ERROR = 0x06,
-    CONFIG_ERROR = 0x07
 };
 
 // ============================================================================
@@ -139,49 +123,6 @@ struct BatteryStatusMsg {
 } __attribute__((packed));
 
 static_assert(sizeof(BatteryStatusMsg) <= ESPNOW_MAX_PAYLOAD, "BatteryStatusMsg too large");
-
-/**
- * @brief Combined sensor reading (multiple values in one message)
- */
-struct MultiSensorReadingMsg {
-    MessageHeader header;
-    uint8_t sensor_count;           // Number of moisture readings
-    uint8_t has_environmental : 1;  // Includes temp/humidity
-    uint8_t has_battery : 1;        // Includes battery status
-    uint8_t reserved : 6;
-
-    // Variable payload follows:
-    // - sensor_count * MoistureSensorData
-    // - Optional: EnvironmentalData
-    // - Optional: BatteryData
-    uint8_t payload[200];           // Max payload for variable data
-} __attribute__((packed));
-
-/**
- * @brief Moisture data within MultiSensorReadingMsg
- */
-struct MoistureSensorData {
-    uint8_t sensor_index;
-    uint16_t raw_value;
-    uint8_t moisture_percent;
-} __attribute__((packed));
-
-/**
- * @brief Environmental data within MultiSensorReadingMsg
- */
-struct EnvironmentalData {
-    int16_t temperature_c_x10;
-    uint16_t humidity_percent_x10;
-} __attribute__((packed));
-
-/**
- * @brief Battery data within MultiSensorReadingMsg
- */
-struct BatteryData {
-    uint16_t voltage_mv;
-    uint8_t percent;
-    uint8_t flags;  // charging, low_battery
-} __attribute__((packed));
 
 // ============================================================================
 // CONTROL MESSAGES
@@ -298,48 +239,9 @@ struct AckMsg {
 
 static_assert(sizeof(AckMsg) <= ESPNOW_MAX_PAYLOAD, "AckMsg too large");
 
-/**
- * @brief Negative acknowledgment message
- */
-struct NackMsg {
-    MessageHeader header;
-    uint8_t nacked_sequence;        // Sequence number being rejected
-    MessageType nacked_type;        // Type of message being rejected
-    NackReason reason;              // Reason for rejection
-    char message[32];               // Optional error message
-} __attribute__((packed));
-
-static_assert(sizeof(NackMsg) <= ESPNOW_MAX_PAYLOAD, "NackMsg too large");
-
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * @brief Get message type name as string
- */
-inline const char* getMessageTypeName(MessageType type) {
-    switch (type) {
-        case MessageType::MOISTURE_READING: return "MOISTURE_READING";
-        case MessageType::ENVIRONMENTAL_READING: return "ENVIRONMENTAL_READING";
-        case MessageType::BATTERY_STATUS: return "BATTERY_STATUS";
-        case MessageType::MULTI_SENSOR_READING: return "MULTI_SENSOR_READING";
-        case MessageType::RELAY_COMMAND: return "RELAY_COMMAND";
-        case MessageType::CALIBRATION_COMMAND: return "CALIBRATION_COMMAND";
-        case MessageType::CONFIG_COMMAND: return "CONFIG_COMMAND";
-        case MessageType::WAKE_COMMAND: return "WAKE_COMMAND";
-        case MessageType::REBOOT_COMMAND: return "REBOOT_COMMAND";
-        case MessageType::OTA_COMMAND: return "OTA_COMMAND";
-        case MessageType::ANNOUNCE: return "ANNOUNCE";
-        case MessageType::PAIR_REQUEST: return "PAIR_REQUEST";
-        case MessageType::PAIR_RESPONSE: return "PAIR_RESPONSE";
-        case MessageType::HEARTBEAT: return "HEARTBEAT";
-        case MessageType::UNPAIR: return "UNPAIR";
-        case MessageType::ACK: return "ACK";
-        case MessageType::NACK: return "NACK";
-        default: return "UNKNOWN";
-    }
-}
 
 /**
  * @brief Check if message type requires acknowledgment by default

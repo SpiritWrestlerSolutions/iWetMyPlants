@@ -89,7 +89,7 @@ ESP-NOW is a 2.4GHz peer-to-peer protocol (no router required). Used between Hub
 - `sendWithAck()` — blocks until ACK or timeout
 - `sendWithRetry()` — calls sendWithAck up to N times
 - `broadcast()` — to all peers (broadcast MAC FF:FF:FF:FF:FF:FF)
-- Convenience wrappers: `sendMoistureReading()`, `sendRelayCommand()`, `sendAnnounce()`, `sendPairRequest()`, `sendHeartbeat()`, `sendAck()`, `sendNack()`, etc.
+- Convenience wrappers: `sendMoistureReading()`, `sendRelayCommand()`, `sendAnnounce()`, `sendPairRequest()`, `sendAck()`, etc.
 
 ### 3.2 WiFi (`shared/communication/wifi_manager.h/.cpp`)
 
@@ -137,7 +137,7 @@ All messages share a 14-byte `MessageHeader`:
 protocol_version (1B) | type (1B) | sender_mac (6B) | sequence_number (1B) | flags (1B) | timestamp (4B)
 ```
 
-**Flags:** `REQUIRES_ACK (0x01)`, `IS_RETRY (0x02)`, `ENCRYPTED (0x04)`, `FRAGMENTED (0x08)`
+**Flags:** `REQUIRES_ACK (0x01)`, `IS_RETRY (0x02)`
 
 **Message types (`MessageType` enum):**
 
@@ -146,7 +146,6 @@ protocol_version (1B) | type (1B) | sender_mac (6B) | sequence_number (1B) | fla
 | 0x01 | `MOISTURE_READING` | Remote/GH → Hub | sensor_index, raw_value, moisture_percent, rssi |
 | 0x02 | `ENVIRONMENTAL_READING` | GH → Hub | temp×10, humidity×10 |
 | 0x03 | `BATTERY_STATUS` | Remote → Hub | voltage_mv, percent, charging flag |
-| 0x04 | `MULTI_SENSOR_READING` | Any → Hub | Variable: N moisture + optional env + optional battery |
 | 0x10 | `RELAY_COMMAND` | Hub → GH | relay_index, state, duration_sec, override_safety |
 | 0x11 | `CALIBRATION_COMMAND` | Hub → Remote/GH | sensor_index, point (0=dry,1=wet,2=cancel) |
 | 0x12 | `CONFIG_COMMAND` | Hub → Any | config_section, JSON payload |
@@ -224,7 +223,8 @@ DeviceConfig {
 ### 6.1 Moisture Sensors
 
 **Base interface:** `MoistureSensor` (`shared/sensors/sensor_interface.h`)
-- Virtual methods: `begin()`, `read()` → raw uint16, `readPercent()`, `calibrateDry()`, `calibrateWet()`, `isReady()`, `isHardwareConnected()`, `getInputType()`, `getName()`
+- Virtual methods: `begin()`, `read()` → raw uint16, `readPercent()`, `isReady()`, `isHardwareConnected()`, `getInputType()`, `getName()`
+- Two-point calibration lives in `CalibrationManager` (below), not on the sensor
 
 **Implementations:**
 - `CapacitiveMoisture` (`shared/sensors/capacitive_moisture.h/.cpp`) — direct ESP32 ADC, 12-bit (0–4095), reads `adc_pin`
@@ -242,9 +242,6 @@ DeviceConfig {
 - Two-point calibration: `captureDryPoint()` then `captureWetPoint()` then `apply()`
 - Takes N samples and averages; result stored in `MoistureSensorConfig::dry_value` / `wet_value`
 - State machine: `IDLE → CAPTURING_DRY → DRY_CAPTURED → CAPTURING_WET → COMPLETE / ERROR`
-
-**Rapid Read** (`shared/calibration/rapid_read.h/.cpp`)
-- Used during calibration UI: streams rapid readings to `WebServer` WebSocket via `Web.sendRapidReading()`
 
 ---
 
@@ -281,13 +278,13 @@ The `SensorRelayBinding` struct and the `bindings[]` array slot in `DeviceConfig
 - WebSocket used for: real-time sensor updates, calibration live readings, relay state changes
 - `Web.sendRapidReading(sensor_index, raw, avg, percent)` — pushes calibration data to WS clients
 - Delegates all `/api/*` routes to `ApiEndpoints::registerRoutes()`
-- Device-specific behavior injected via callbacks: `onStatus()`, `onSensorRead()`, `onRelayControl()`, `onCalibration()`, `onConfigUpdate()`, `onReboot()`
+- Device-specific behavior injected via the `onCalibration()` callback (other routes read shared state directly)
 
 ### 8.2 API Endpoints (`shared/web/api_endpoints.h/.cpp`)
 
 **Class:** `ApiEndpoints` (static methods, no instance)
 
-All routes respond with JSON. Errors return HTTP codes mapped from `ErrorCode` via `getHttpStatus()`.
+All routes respond with JSON. Errors return an appropriate HTTP status (400/401/404/500) with a JSON error body.
 
 | Route | Method | Description |
 |-------|--------|-------------|
@@ -353,20 +350,6 @@ All routes respond with JSON. Errors return HTTP codes mapped from `ErrorCode` v
 - `Watchdog.feed()` — called every loop iteration
 - Hub/Greenhouse timeout: 60 s (sensor reads + WiFi + MQTT can take ~500 ms per iteration)
 
-### 10.3 Error Codes (`shared/utils/error_codes.h`)
-
-`ErrorCode` enum (uint16):
-- General (1–99), Config (100–199), WiFi/Net (200–299), MQTT (300–399), ESP-NOW (400–499), Sensor (500–599), Relay (600–699), OTA (700–799), Web (800–899), Automation (900–999)
-- `getErrorMessage(ErrorCode)` — human-readable string
-- `getHttpStatus(ErrorCode)` — maps to HTTP 200/400/403/404/409/429/500/501/503
-
-### 10.4 Error Tracker (`shared/utils/error_tracker.h/.cpp`)
-
-**Class:** `ErrorTracker Errors`
-- Circular buffer of 16 `ErrorRecord` entries (code, severity, context, line, timestamp)
-- `IWMP_ERROR(code)`, `IWMP_WARNING(code)`, `IWMP_CRITICAL(code)` macros
-- `hasCriticalErrors()`, `totalErrors()`, `timeSinceLastError()`
-
 ---
 
 ## 11. Build System (`platformio.ini`)
@@ -397,7 +380,7 @@ Three environments share a base `[env]` section:
 - `board = esp32-c3-devkitm-1`, native USB CDC (`cdc_on_boot=1`), `partitions = huge_app.csv`
 - `-DIWMP_DEVICE_TYPE=1 -DIWMP_MAX_SENSORS=1 -DIWMP_NO_ENVIRONMENTAL=1`
 - Ignores: `DHT sensor library`, `ClosedCube SHT31D` (not needed)
-- **Explicit whitelist** (not `shared/**/*.cpp`): only `config_manager.cpp`, `wifi_manager.cpp`, `mqtt_manager.cpp`, `espnow_manager.cpp`, `sensor_interface.cpp`, `ads1115_moisture.cpp`, `capacitive_moisture.cpp`, `logger.cpp`, `error_tracker.cpp` + all `remote/src/**/*.cpp`
+- **Explicit whitelist** (not `shared/**/*.cpp`): only `config_manager.cpp`, `wifi_manager.cpp`, `mqtt_manager.cpp`, `espnow_manager.cpp`, `sensor_interface.cpp`, `ads1115_moisture.cpp`, `capacitive_moisture.cpp`, `logger.cpp`, `admin_auth.cpp` + all `remote/src/**/*.cpp`
 - `monitor_rts=0 monitor_dtr=0` (CDC quirk)
 - `Serial.setTxTimeoutMs(0)` in main to prevent CDC blocking
 - 1500 ms startup delay to let USB stack settle before `softAP()`
@@ -577,16 +560,14 @@ iWetMyPlants/
 │   │   ├── dht_sensor.h/.cpp         DHT11/22 temperature+humidity
 │   │   └── sht_sensor.h/.cpp         SHT30/31/40/41 temperature+humidity
 │   ├── calibration/
-│   │   ├── calibration_manager.h/.cpp  CalibrationManager, two-point cal
-│   │   └── rapid_read.h/.cpp           Rapid reading stream for cal UI
+│   │   └── calibration_manager.h/.cpp  CalibrationManager, two-point cal
 │   ├── web/
 │   │   ├── web_server.h/.cpp         WebServer Web singleton (Hub/GH)
 │   │   └── api_endpoints.h/.cpp      ApiEndpoints static class, all /api routes
 │   └── utils/
 │       ├── logger.h/.cpp             Logger Log, LOG_I/W/E/D macros
 │       ├── watchdog.h/.cpp           Watchdog, 60 s HW WDT
-│       ├── error_codes.h             ErrorCode enum, getErrorMessage/getHttpStatus
-│       ├── error_tracker.h/.cpp      ErrorTracker Errors, circular history
+│       ├── admin_auth.h/.cpp         AdminAuth, single-password Basic Auth
 │       └── ota_manager.h/.cpp        OtaManager Ota, web-based OTA
 │
 ├── docs/

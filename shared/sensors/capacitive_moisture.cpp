@@ -80,31 +80,8 @@ uint16_t DirectAdcInput::readRaw() {
     return analogRead(_pin);
 }
 
-void DirectAdcInput::setAttenuation(uint8_t atten) {
-    _attenuation = atten;
-    if (_initialized) {
-        configureAdc();
-    }
-}
-
 bool DirectAdcInput::isAdc1Pin() const {
     return isAdc1GpioPin(_pin);
-}
-
-uint16_t DirectAdcInput::readMultisampled(uint8_t samples) {
-    if (!_initialized || samples == 0) {
-        return 0;
-    }
-
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < samples; i++) {
-        sum += analogRead(_pin);
-        if (i < samples - 1) {
-            delayMicroseconds(100);  // Small delay between samples
-        }
-    }
-
-    return sum / samples;
 }
 
 void DirectAdcInput::configureAdc() {
@@ -113,16 +90,7 @@ void DirectAdcInput::configureAdc() {
 
     // Set attenuation for full 0-3.3V range
     // ADC_ATTEN_DB_12 (formerly DB_11) gives approximately 0-3.3V input range
-    adc_atten_t atten;
-    switch (_attenuation) {
-        case 0: atten = ADC_ATTEN_DB_0; break;    // 0-1.1V
-        case 1: atten = ADC_ATTEN_DB_2_5; break;  // 0-1.5V
-        case 2: atten = ADC_ATTEN_DB_6; break;    // 0-2.2V
-        case 3:
-        default: atten = ADC_ATTEN_DB_12; break;  // 0-3.3V (use DB_12, DB_11 is deprecated)
-    }
-
-    analogSetPinAttenuation(_pin, static_cast<adc_attenuation_t>(atten));
+    analogSetPinAttenuation(_pin, static_cast<adc_attenuation_t>(ADC_ATTEN_DB_12));
 }
 
 } // namespace iwmp

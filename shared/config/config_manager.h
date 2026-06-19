@@ -11,7 +11,6 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-#include <functional>
 #include "config_schema.h"
 #include "defaults.h"
 
@@ -20,20 +19,8 @@ namespace iwmp {
 // NVS namespace for configuration storage
 static constexpr const char* NVS_NAMESPACE = "iwmp_config";
 
-// NVS keys for individual sections (for partial updates)
+// NVS key for the configuration blob
 static constexpr const char* KEY_CONFIG_BLOB = "config";
-static constexpr const char* KEY_WIFI = "wifi";
-static constexpr const char* KEY_MQTT = "mqtt";
-static constexpr const char* KEY_ESPNOW = "espnow";
-static constexpr const char* KEY_SENSORS = "sensors";
-static constexpr const char* KEY_RELAYS = "relays";
-static constexpr const char* KEY_BINDINGS = "bindings";
-static constexpr const char* KEY_POWER = "power";
-
-/**
- * @brief Configuration change callback type
- */
-using ConfigChangeCallback = std::function<void(const DeviceConfig& config)>;
 
 /**
  * @brief Configuration manager for NVS storage
@@ -215,14 +202,6 @@ public:
      */
     void setCalibration(uint8_t index, uint16_t dry_value, uint16_t wet_value);
 
-    // ============ Callbacks ============
-
-    /**
-     * @brief Register callback for configuration changes
-     * @param callback Function to call when config changes
-     */
-    void onConfigChange(ConfigChangeCallback callback);
-
     // ============ Validation ============
 
     /**
@@ -243,18 +222,6 @@ public:
      */
     bool migrate();
 
-    // ============ Debug ============
-
-    /**
-     * @brief Print configuration summary to Serial
-     */
-    void printConfig() const;
-
-    /**
-     * @brief Get configuration size in bytes
-     */
-    size_t getConfigSize() const { return sizeof(DeviceConfig); }
-
 private:
     ConfigManager() = default;
     ~ConfigManager() = default;
@@ -263,7 +230,6 @@ private:
     DeviceType _device_type = DeviceType::HUB;
     bool _initialized = false;
     Preferences _prefs;
-    ConfigChangeCallback _change_callback = nullptr;
 
     /**
      * @brief Generate device ID from MAC address
@@ -286,11 +252,6 @@ private:
      * @brief Update CRC32 in configuration
      */
     void updateCrc();
-
-    /**
-     * @brief Notify change callback
-     */
-    void notifyChange();
 };
 
 // Global config manager accessor

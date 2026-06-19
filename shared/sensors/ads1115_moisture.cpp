@@ -211,31 +211,6 @@ void Ads1115Input::setSampleRate(Ads1115SampleRate rate) {
     }
 }
 
-float Ads1115Input::readVoltage() {
-    if (!_initialized || !_adc) {
-        return 0.0f;
-    }
-
-    int16_t raw = readADCSafe(_channel);
-    return raw * getVoltageScale();
-}
-
-int16_t Ads1115Input::readDifferential(uint8_t pos_channel, uint8_t neg_channel) {
-    if (!_initialized || !_adc) {
-        return 0;
-    }
-
-    // ADS1115 supports differential pairs: 0-1 and 2-3
-    if (pos_channel == 0 && neg_channel == 1) {
-        return _adc->readADC_Differential_0_1();
-    } else if (pos_channel == 2 && neg_channel == 3) {
-        return _adc->readADC_Differential_2_3();
-    }
-
-    LOG_E(TAG, "Invalid differential channel pair");
-    return 0;
-}
-
 bool Ads1115Input::isConnected() const {
     if (!_adc || !_wire) {
         return false;
@@ -253,19 +228,6 @@ bool Ads1115Input::isConnected() const {
 
     if (mtx) xSemaphoreGive(mtx);
     return connected;
-}
-
-Adafruit_ADS1115* Ads1115Input::getSharedAdc(uint8_t address) {
-    uint8_t instance_idx = address - 0x48;
-    if (instance_idx >= 4) {
-        return nullptr;
-    }
-
-    if (!s_adc_initialized[instance_idx]) {
-        return nullptr;
-    }
-
-    return &s_adc_instances[instance_idx];
 }
 
 void Ads1115Input::applyGain() {
@@ -320,19 +282,6 @@ void Ads1115Input::applyDataRate() {
     }
 
     _adc->setDataRate(rate);
-}
-
-float Ads1115Input::getVoltageScale() const {
-    // Returns mV per bit based on gain setting
-    switch (_gain) {
-        case Ads1115Gain::GAIN_TWOTHIRDS: return 0.1875f;  // +/- 6.144V
-        case Ads1115Gain::GAIN_ONE:       return 0.125f;   // +/- 4.096V
-        case Ads1115Gain::GAIN_TWO:       return 0.0625f;  // +/- 2.048V
-        case Ads1115Gain::GAIN_FOUR:      return 0.03125f; // +/- 1.024V
-        case Ads1115Gain::GAIN_EIGHT:     return 0.015625f; // +/- 0.512V
-        case Ads1115Gain::GAIN_SIXTEEN:   return 0.0078125f; // +/- 0.256V
-        default: return 0.125f;
-    }
 }
 
 } // namespace iwmp

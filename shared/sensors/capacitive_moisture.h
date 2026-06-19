@@ -73,26 +73,12 @@ public:
     uint8_t getPin() const { return _pin; }
 
     /**
-     * @brief Set ADC attenuation
-     * @param atten Attenuation (0=0dB, 1=2.5dB, 2=6dB, 3=11dB)
-     */
-    void setAttenuation(uint8_t atten);
-
-    /**
      * @brief Check if pin is on ADC1 (WiFi-safe)
      */
     bool isAdc1Pin() const;
 
-    /**
-     * @brief Read with multisampling for noise reduction
-     * @param samples Number of samples to average
-     * @return Averaged ADC value
-     */
-    uint16_t readMultisampled(uint8_t samples);
-
 private:
     uint8_t _pin;
-    uint8_t _attenuation = ESP32_ADC_ATTEN;
     bool _initialized = false;
 
     /**

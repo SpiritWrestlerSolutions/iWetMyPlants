@@ -241,38 +241,6 @@ void WifiManager::loop() {
     }
 }
 
-String WifiManager::getMacAddress() const {
-    // efuse MAC is fixed for the lifetime of the process — read once
-    // and cache. The string was being rebuilt on every call (often in
-    // log lines on hot paths).
-    static char cached[13] = {0};
-    if (cached[0] == '\0') {
-        uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);
-        snprintf(cached, sizeof(cached), "%02X%02X%02X%02X%02X%02X",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    }
-    return String(cached);
-}
-
-int16_t WifiManager::scanNetworks() {
-    LOG_I(TAG, "Starting network scan...");
-    return WiFi.scanNetworks(true);  // Async scan
-}
-
-bool WifiManager::getScannedNetwork(uint8_t index, String& ssid, int32_t& rssi, bool& encrypted) {
-    int16_t count = WiFi.scanComplete();
-    if (count < 0 || index >= count) {
-        return false;
-    }
-
-    ssid = WiFi.SSID(index);
-    rssi = WiFi.RSSI(index);
-    encrypted = (WiFi.encryptionType(index) != WIFI_AUTH_OPEN);
-
-    return true;
-}
-
 void WifiManager::handleDNS() {
     // Process a few DNS requests per call — phones send several probes
     // during captive portal detection. Keep this small (2-3) so that on

@@ -112,46 +112,8 @@ void MoistureSensor::setWetValue(uint16_t value) {
     _config.wet_value = value;
 }
 
-void MoistureSensor::calibrateDry() {
-    if (!isReady()) {
-        return;
-    }
-
-    _config.dry_value = readRawAveraged();
-    LOG_I(TAG, "%s dry calibration: %u", _config.sensor_name, _config.dry_value);
-}
-
-void MoistureSensor::calibrateWet() {
-    if (!isReady()) {
-        return;
-    }
-
-    _config.wet_value = readRawAveraged();
-    LOG_I(TAG, "%s wet calibration: %u", _config.sensor_name, _config.wet_value);
-}
-
-bool MoistureSensor::isCalibrated() const {
-    // Calibration is valid if dry and wet values are different
-    // and have reasonable separation
-    uint16_t diff = (_config.dry_value > _config.wet_value)
-                    ? (_config.dry_value - _config.wet_value)
-                    : (_config.wet_value - _config.dry_value);
-
-    // Require at least 10% of ADC range difference
-    uint16_t min_diff = _input ? _input->getMaxValue() / 10 : 400;
-    return diff >= min_diff;
-}
-
 void MoistureSensor::updateConfig(const MoistureSensorConfig& config) {
     _config = config;
-}
-
-void MoistureSensor::setSampleCount(uint8_t samples) {
-    _config.reading_samples = samples;
-}
-
-void MoistureSensor::setSampleDelay(uint16_t delay_ms) {
-    _config.sample_delay_ms = delay_ms;
 }
 
 // ============ Factory Functions ============
@@ -172,16 +134,10 @@ std::unique_ptr<ISensorInput> createSensorInput(const MoistureSensorConfig& conf
             return input;
         }
 
-        case SensorInputType::MUX_CD74HC4067: {
-            // For MUX, we need additional configuration not in MoistureSensorConfig
-            // This is a simplified version - real implementation would need
-            // MUX pin configuration from somewhere
-            LOG_W(TAG, "MUX input requires additional pin configuration");
-            return nullptr;
-        }
-
         default:
-            LOG_E(TAG, "Unknown input type: %d", static_cast<int>(config.input_type));
+            // MUX_CD74HC4067 needs hub-specific pin assignments the shared
+            // factory doesn't have, so it's built directly by the hub.
+            LOG_E(TAG, "Unsupported input type for factory: %d", static_cast<int>(config.input_type));
             return nullptr;
     }
 }

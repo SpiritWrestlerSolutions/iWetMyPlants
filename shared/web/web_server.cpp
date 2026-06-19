@@ -188,37 +188,6 @@ void WebServer::sendRapidReading(uint8_t sensor_index, uint16_t raw, uint16_t av
     _ws->textAll(buf);
 }
 
-void WebServer::sendJson(AsyncWebServerRequest* request, int code, const JsonDocument& doc) {
-    String json;
-    serializeJson(doc, json);
-    request->send(code, "application/json", json);
-}
-
-void WebServer::sendError(AsyncWebServerRequest* request, int code, const char* message) {
-    JsonDocument doc;
-    doc["error"] = true;
-    doc["message"] = message;
-    sendJson(request, code, doc);
-}
-
-void WebServer::sendSuccess(AsyncWebServerRequest* request, const char* message) {
-    JsonDocument doc;
-    doc["success"] = true;
-    doc["message"] = message;
-    sendJson(request, 200, doc);
-}
-
-bool WebServer::parseJsonBody(AsyncWebServerRequest* request, uint8_t* data, size_t len,
-                               JsonDocument& doc, String& error) {
-    DeserializationError err = deserializeJson(doc, data, len);
-    if (err) {
-        error = "Invalid JSON: ";
-        error += err.c_str();
-        return false;
-    }
-    return true;
-}
-
 void WebServer::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client,
                           AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {

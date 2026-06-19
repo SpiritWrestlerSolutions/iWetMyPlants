@@ -36,12 +36,6 @@ public:
     void setLevel(LogLevel level) { _level = level; }
 
     /**
-     * @brief Get current log level
-     * @return Current level
-     */
-    LogLevel getLevel() const { return _level; }
-
-    /**
      * @brief Enable/disable timestamps
      * @param enabled Show timestamps
      */
@@ -77,16 +71,6 @@ public:
      * @brief Log verbose message
      */
     void verbose(const char* tag, const char* format, ...);
-
-    /**
-     * @brief Log with specific level
-     */
-    void log(LogLevel level, const char* tag, const char* format, ...);
-
-    /**
-     * @brief Log hexdump of data
-     */
-    void hexdump(LogLevel level, const char* tag, const uint8_t* data, size_t len);
 
 private:
     LogLevel _level = LogLevel::INFO;

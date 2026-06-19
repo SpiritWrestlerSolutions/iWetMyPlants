@@ -26,20 +26,19 @@ CaptivePortal& CaptivePortal::getInstance() {
 
 CaptivePortal::CaptivePortal() {
     _ap_ssid[0] = '\0';
-    _ap_password[0] = '\0';
     _ap_ip = AP_IP;
 }
 
-bool CaptivePortal::begin(const char* ap_ssid, const char* ap_password, uint32_t timeout_ms) {
+bool CaptivePortal::begin(const DeviceIdentity& identity, uint32_t timeout_ms) {
     if (_state != PortalState::INACTIVE) {
         stop();
     }
 
     setState(PortalState::STARTING);
 
-    // Store configuration
-    strlcpy(_ap_ssid, ap_ssid, sizeof(_ap_ssid));
-    strlcpy(_ap_password, ap_password, sizeof(_ap_password));
+    // Generate AP name from device ID. The portal AP is always open (no
+    // password) — it only ever serves the WiFi-setup page.
+    snprintf(_ap_ssid, sizeof(_ap_ssid), "iWetMyPlants-%s", identity.device_id);
     _timeout_ms = timeout_ms;
     _start_time = millis();
 
@@ -51,15 +50,8 @@ bool CaptivePortal::begin(const char* ap_ssid, const char* ap_password, uint32_t
     WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
 
-    // Start AP
-    bool ap_started;
-    if (strlen(_ap_password) >= 8) {
-        ap_started = WiFi.softAP(_ap_ssid, _ap_password);
-    } else {
-        ap_started = WiFi.softAP(_ap_ssid);
-    }
-
-    if (!ap_started) {
+    // Start AP (open network)
+    if (!WiFi.softAP(_ap_ssid)) {
         LOG_E(TAG, "Failed to start AP");
         setState(PortalState::INACTIVE);
         return false;
@@ -85,13 +77,6 @@ bool CaptivePortal::begin(const char* ap_ssid, const char* ap_password, uint32_t
     setState(PortalState::ACTIVE);
 
     return true;
-}
-
-bool CaptivePortal::begin(const DeviceIdentity& identity, uint32_t timeout_ms) {
-    // Generate AP name from device ID
-    char ap_name[33];
-    snprintf(ap_name, sizeof(ap_name), "iWetMyPlants-%s", identity.device_id);
-    return begin(ap_name, "", timeout_ms);
 }
 
 void CaptivePortal::stop() {
@@ -189,15 +174,10 @@ void CaptivePortal::setupRoutes() {
     }
 
     // Captive portal detection endpoints
-    // These are checked by various OS/browsers
-    _server->on("/generate_204", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        request->redirect("http://" + _ap_ip.toString() + "/");
-    });
-
-    _server->on("/fwlink", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        request->redirect("http://" + _ap_ip.toString() + "/");
-    });
-
+    // These are checked by various OS/browsers.
+    // Note: /generate_204 and /fwlink are intentionally NOT registered here —
+    // they fall through to the onNotFound catch-all below, which issues the
+    // identical redirect to the portal root.
     _server->on("/hotspot-detect.html", HTTP_GET, [this](AsyncWebServerRequest* request) {
         servePortalPage(request);
     });

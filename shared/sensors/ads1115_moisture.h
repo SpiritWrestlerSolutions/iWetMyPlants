@@ -138,33 +138,9 @@ public:
     Ads1115SampleRate getSampleRate() const { return _sample_rate; }
 
     /**
-     * @brief Read voltage in millivolts
-     * @return Voltage in mV
-     */
-    float readVoltage();
-
-    /**
-     * @brief Read differential between two channels
-     * @param pos_channel Positive channel (0 or 2)
-     * @param neg_channel Negative channel (1 or 3)
-     * @return Differential ADC value
-     */
-    int16_t readDifferential(uint8_t pos_channel, uint8_t neg_channel);
-
-    /**
      * @brief Check if ADC chip is responding
      */
     bool isConnected() const override;
-
-    /**
-     * @brief Get shared ADS1115 instance for address
-     * @param address I2C address
-     * @return Pointer to shared Adafruit_ADS1115 instance
-     *
-     * Multiple Ads1115Input instances can share the same
-     * physical ADC chip if they use the same address.
-     */
-    static Adafruit_ADS1115* getSharedAdc(uint8_t address);
 
     /**
      * @brief Assign a TwoWire instance to an ADS1115 address.
@@ -193,11 +169,6 @@ private:
      * @brief Apply sample rate setting to ADC
      */
     void applyDataRate();
-
-    /**
-     * @brief Get voltage scale factor for current gain
-     */
-    float getVoltageScale() const;
 
     /**
      * @brief Read ADC with delay instead of busy-wait polling.

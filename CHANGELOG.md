@@ -20,7 +20,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **MQTT heap fragmentation fixed in callbacks and hot publishers.** `onMqttMessage` uses a stack buffer (heap fallback only for >256-byte payloads) instead of `new char[len+1]` per message; five hot-path publishers (`publishState`, `publishMoistureReading`, `publishEnvironmentalReading`, `publishBatteryStatus`, `publishRelayState`) use stack buffers instead of `String`. Same class of fix as the prior RapidRead/HubController conversions.
 - **ESP-NOW RX mutex bounded at 50 ms** (was `portMAX_DELAY` — could deadlock the WiFi RX task).
 - **`clearAllPeers()` capped at 32 iterations** to prevent runaway loops if the underlying iterator misbehaves.
-- **Watchdog `setTimeout()` safe under feed-from-other-task races** (new `_changing_timeout` guard during deinit/reinit).
 - **Config mutable accessors no longer cross-contaminate via shared dummy on out-of-range access** — dummies re-zero on each invalid call and log loudly.
 
 ### Greenhouse rescope (finalized)
@@ -39,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Ping result tags the device version** with `↑ upgrade available` / `↓ newer than published` / `✓ up to date` so users can tell at a glance whether OTA-flashing the bundled `.bin` would be an upgrade, downgrade, or no-op.
 
 ### Developer hygiene
+- **Dead-code sweep (−~2,000 lines across 40 files; 5 files deleted).** Removed unreferenced subsystems and methods across comms, sensors, web, config, and controllers: the error tracker (and its always-empty `GET /api/system/errors` endpoint), the `rapid_read` calibration stubs, `error_codes.h`'s `getHttpStatus()` HTTP mapping, the `MuxManager` registry, the WebServer device-callback layer, and assorted unused MQTT / ESP-NOW / WiFi / sensor / watchdog / config accessors. No behavioral change; all three targets build green (Flash −7–10 KB, RAM ~−0.8 KB per target).
 - `static_assert` on every packed config struct's size — silent ABI drift now fails the build instead of bricking in-field NVS blobs.
 - Per-channel ADS1115 re-probe skip counter (was a `static` local, so one bad channel delayed re-probes on healthy siblings).
 - Relay GPIO `digitalWrite` skipped if the cached state matches — no more re-asserting the line every loop tick.

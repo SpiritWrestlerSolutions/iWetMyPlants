@@ -444,10 +444,6 @@ void HubController::onPairRequest(const PairRequestMsg& msg) {
     }
 }
 
-uint8_t HubController::getConnectedDeviceCount() const {
-    return (uint8_t)_registry.getOnlineDeviceCount();
-}
-
 void HubController::onMoistureReading(const MoistureReadingMsg& msg) {
     char mac_str[18];
     formatMac(msg.header.sender_mac, mac_str, sizeof(mac_str));
@@ -512,41 +508,6 @@ void HubController::onBatteryStatus(const BatteryStatusMsg& msg) {
     if (Mqtt.isConnected()) {
         Mqtt.publishBatteryStatus(msg.voltage_mv, msg.percent, msg.charging);
     }
-}
-
-void HubController::sendRelayCommand(const uint8_t* target_mac, uint8_t relay,
-                                      bool state, uint32_t duration) {
-    LOG_I(TAG, "Sending relay command: relay=%d, state=%d, dur=%lu",
-          relay, state, duration);
-
-    if (EspNow.isInitialized()) {
-        EspNow.sendRelayCommand(target_mac, relay, state, duration);
-    }
-}
-
-void HubController::sendCalibrationCommand(const uint8_t* target_mac,
-                                            uint8_t sensor, uint8_t point) {
-    LOG_I(TAG, "Sending calibration command: sensor=%d, point=%d", sensor, point);
-
-    // Build and send calibration command message
-    CalibrationCommandMsg msg;
-    initMessageHeader(msg.header, MessageType::CALIBRATION_COMMAND,
-                      EspNow.getMac(), EspNow.getNextSequence());
-    msg.sensor_index = sensor;
-    msg.calibration_point = point;
-    msg.manual_value = 0;  // Use current reading
-
-    EspNow.send(target_mac, (uint8_t*)&msg, sizeof(msg));
-}
-
-void HubController::sendWakeCommand(const uint8_t* target_mac) {
-    LOG_I(TAG, "Sending wake command");
-
-    MessageHeader msg;
-    initMessageHeader(msg, MessageType::WAKE_COMMAND,
-                      EspNow.getMac(), EspNow.getNextSequence());
-
-    EspNow.send(target_mac, (uint8_t*)&msg, sizeof(msg));
 }
 
 void HubController::checkDeviceTimeouts() {
@@ -639,16 +600,6 @@ void HubController::onEspNowReceive(const uint8_t* mac, const uint8_t* data, int
             LOG_W(TAG, "Unknown message type: 0x%02X", (uint8_t)header->type);
             break;
     }
-}
-
-void HubController::onMqttMessage(const char* topic, const char* payload) {
-    LOG_D(TAG, "MQTT message: %s = %s", topic, payload);
-
-    // Parse relay commands
-    // Topic format: iwetmyplants/device_id/relay/N/set
-    // Payload: ON, OFF, or JSON with duration
-
-    // This is handled by MqttManager's relay callback
 }
 
 void HubController::setupWebRoutes() {
@@ -770,22 +721,14 @@ void HubController::setupWebRoutes() {
             return false;
         }
 
-        const auto& sensor_cfg = Config.getMoistureSensor(index);
-
         if (_local_sensors[index]) {
-            status.exists = true;
             status.ready = _local_sensors[index]->isReady();
             status.hw_connected = _local_sensors[index]->isHardwareConnected();
             status.input_type = _local_sensors[index]->getInputTypeName();
-            status.ads_channel = sensor_cfg.ads_channel;
-            status.ads_address = sensor_cfg.ads_i2c_address;
         } else {
-            status.exists = false;
             status.ready = false;
             status.hw_connected = false;
             status.input_type = "None";
-            status.ads_channel = 0;
-            status.ads_address = 0;
         }
         return true;
     });

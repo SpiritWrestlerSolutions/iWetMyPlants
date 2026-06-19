@@ -123,11 +123,6 @@ public:
      */
     uint16_t getLastRaw() const { return _last_raw; }
 
-    /**
-     * @brief Get last percentage reading
-     */
-    uint8_t getLastPercent() const { return _last_percent; }
-
     // ============ Calibration ============
 
     /**
@@ -152,21 +147,6 @@ public:
      */
     uint16_t getWetValue() const { return _config.wet_value; }
 
-    /**
-     * @brief Capture current reading as dry point
-     */
-    void calibrateDry();
-
-    /**
-     * @brief Capture current reading as wet point
-     */
-    void calibrateWet();
-
-    /**
-     * @brief Check if calibration is valid
-     */
-    bool isCalibrated() const;
-
     // ============ Configuration ============
 
     /**
@@ -185,11 +165,6 @@ public:
     void setIndex(uint8_t index) { _index = index; }
 
     /**
-     * @brief Get configuration
-     */
-    const MoistureSensorConfig& getConfig() const { return _config; }
-
-    /**
      * @brief Get input type name
      */
     const char* getInputTypeName() const { return _input ? _input->getTypeName() : "None"; }
@@ -203,16 +178,6 @@ public:
      * @brief Update configuration
      */
     void updateConfig(const MoistureSensorConfig& config);
-
-    /**
-     * @brief Set number of samples for averaging
-     */
-    void setSampleCount(uint8_t samples);
-
-    /**
-     * @brief Set delay between samples
-     */
-    void setSampleDelay(uint16_t delay_ms);
 
 private:
     std::unique_ptr<ISensorInput> _input;

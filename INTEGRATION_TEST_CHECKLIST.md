@@ -55,7 +55,6 @@
 ### API Endpoints
 - [ ] `GET /api/status` returns device info
 - [ ] `GET /api/system/info` returns chip info
-- [ ] `GET /api/system/errors` returns error history
 - [ ] `POST /api/system/reboot` triggers reboot
 - [ ] `GET /api/sensors` returns sensor list
 - [ ] `GET /api/config` returns configuration

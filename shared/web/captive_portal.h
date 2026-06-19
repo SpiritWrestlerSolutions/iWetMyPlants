@@ -66,19 +66,12 @@ public:
     static CaptivePortal& getInstance();
 
     /**
-     * @brief Start the captive portal
-     * @param ap_ssid Access point SSID
-     * @param ap_password Access point password (empty for open)
+     * @brief Start the captive portal with device identity for auto-naming.
+     *        The AP is always open (no password) — it only serves the
+     *        WiFi-setup page.
+     * @param identity Device identity for AP name generation
      * @param timeout_ms Portal timeout in ms (0 = no timeout)
      * @return true if portal started successfully
-     */
-    bool begin(const char* ap_ssid, const char* ap_password = "",
-               uint32_t timeout_ms = 300000);
-
-    /**
-     * @brief Start with device identity for auto-naming
-     * @param identity Device identity for AP name generation
-     * @param timeout_ms Portal timeout in ms
      */
     bool begin(const DeviceIdentity& identity, uint32_t timeout_ms = 300000);
 
@@ -153,7 +146,6 @@ private:
 
     // Configuration
     char _ap_ssid[33];
-    char _ap_password[65];
 
     // Internal methods
     void setupRoutes();

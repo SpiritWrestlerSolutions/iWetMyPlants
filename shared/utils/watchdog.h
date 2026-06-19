@@ -27,38 +27,9 @@ public:
      */
     void feed();
 
-    /**
-     * @brief Disable watchdog
-     */
-    void disable();
-
-    /**
-     * @brief Enable watchdog
-     */
-    void enable();
-
-    /**
-     * @brief Check if watchdog is enabled
-     * @return true if enabled
-     */
-    bool isEnabled() const { return _enabled; }
-
-    /**
-     * @brief Set timeout
-     * @param timeout_sec New timeout in seconds
-     */
-    void setTimeout(uint32_t timeout_sec);
-
-    /**
-     * @brief Get time since last feed
-     * @return Milliseconds since last feed
-     */
-    uint32_t timeSinceLastFeed() const;
-
 private:
     bool _enabled = false;
     bool _initialized = false;
-    bool _changing_timeout = false;
     uint32_t _timeout_sec = 30;
     uint32_t _last_feed_time = 0;
 };

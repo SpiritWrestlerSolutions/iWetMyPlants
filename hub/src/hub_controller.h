@@ -52,12 +52,6 @@ public:
      */
     HubState getState() const { return _state; }
 
-    /**
-     * @brief Get device registry
-     * @return Reference to device registry
-     */
-    DeviceRegistry& getRegistry() { return _registry; }
-
     // ============ Device Management ============
 
     /**
@@ -71,12 +65,6 @@ public:
      * @param msg Pair request message
      */
     void onPairRequest(const PairRequestMsg& msg);
-
-    /**
-     * @brief Get connected device count
-     * @return Number of online devices
-     */
-    uint8_t getConnectedDeviceCount() const;
 
     // ============ Data Handling ============
 
@@ -97,33 +85,6 @@ public:
      * @param msg Battery status message
      */
     void onBatteryStatus(const BatteryStatusMsg& msg);
-
-    // ============ Command Forwarding ============
-
-    /**
-     * @brief Send relay command to greenhouse
-     * @param target_mac Target device MAC
-     * @param relay Relay index
-     * @param state Desired state
-     * @param duration Duration in seconds (0 = indefinite)
-     */
-    void sendRelayCommand(const uint8_t* target_mac, uint8_t relay,
-                          bool state, uint32_t duration);
-
-    /**
-     * @brief Send calibration command
-     * @param target_mac Target device MAC
-     * @param sensor Sensor index
-     * @param point Calibration point (0=dry, 1=wet)
-     */
-    void sendCalibrationCommand(const uint8_t* target_mac,
-                                uint8_t sensor, uint8_t point);
-
-    /**
-     * @brief Send wake command to sleeping remote
-     * @param target_mac Target device MAC
-     */
-    void sendWakeCommand(const uint8_t* target_mac);
 
 private:
     HubState _state = HubState::BOOT;
@@ -204,11 +165,6 @@ private:
      * @brief Handle ESP-NOW receive callback
      */
     void onEspNowReceive(const uint8_t* mac, const uint8_t* data, int len);
-
-    /**
-     * @brief Handle MQTT message callback
-     */
-    void onMqttMessage(const char* topic, const char* payload);
 
     /**
      * @brief Setup web server routes

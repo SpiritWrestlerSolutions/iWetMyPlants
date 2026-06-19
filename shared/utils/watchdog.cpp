@@ -44,90 +44,12 @@ bool WatchdogManager::begin(uint32_t timeout_sec) {
 }
 
 void WatchdogManager::feed() {
-    if (!_initialized || !_enabled || _changing_timeout) {
-        // Skip feeding while setTimeout() is mid-deinit/reinit; the WDT
-        // is briefly unregistered and esp_task_wdt_reset() would fail.
+    if (!_initialized || !_enabled) {
         return;
     }
 
     esp_task_wdt_reset();
     _last_feed_time = millis();
-}
-
-void WatchdogManager::disable() {
-    if (!_initialized) {
-        return;
-    }
-
-    // Remove current task from watchdog
-    esp_err_t err = esp_task_wdt_delete(NULL);
-    if (err == ESP_OK) {
-        _enabled = false;
-        LOG_I(TAG, "Watchdog disabled");
-    }
-}
-
-void WatchdogManager::enable() {
-    if (!_initialized) {
-        LOG_W(TAG, "Cannot enable - not initialized");
-        return;
-    }
-
-    if (_enabled) {
-        return;  // Already enabled
-    }
-
-    // Add current task back to watchdog
-    esp_err_t err = esp_task_wdt_add(NULL);
-    if (err == ESP_OK || err == ESP_ERR_INVALID_ARG) {
-        _enabled = true;
-        _last_feed_time = millis();
-        LOG_I(TAG, "Watchdog enabled");
-    }
-}
-
-void WatchdogManager::setTimeout(uint32_t timeout_sec) {
-    if (_timeout_sec == timeout_sec) {
-        return;  // No change needed
-    }
-
-    _timeout_sec = timeout_sec;
-
-    if (!_initialized) {
-        return;
-    }
-
-    // Block feed() during the deinit/reinit window. Without this guard
-    // a feed() call from another task (or an ISR-driven timer) racing
-    // setTimeout() would call esp_task_wdt_reset() against an
-    // unregistered task and fault.
-    _changing_timeout = true;
-
-    // To change timeout, we need to deinit and reinit
-    // First remove our task
-    esp_task_wdt_delete(NULL);
-
-    // Deinit the watchdog
-    esp_task_wdt_deinit();
-
-    // Reinit with new timeout
-    esp_err_t err = esp_task_wdt_init(timeout_sec, true);
-    if (err == ESP_OK) {
-        // Re-add our task
-        esp_task_wdt_add(NULL);
-        _last_feed_time = millis();
-        LOG_I(TAG, "Watchdog timeout changed to %lu sec", timeout_sec);
-    } else {
-        LOG_E(TAG, "Failed to change timeout: %d", err);
-        _initialized = false;
-        _enabled = false;
-    }
-
-    _changing_timeout = false;
-}
-
-uint32_t WatchdogManager::timeSinceLastFeed() const {
-    return millis() - _last_feed_time;
 }
 
 } // namespace iwmp

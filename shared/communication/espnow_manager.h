@@ -60,13 +60,7 @@ struct EspNowStats {
     }
 
     void reset() {
-        packets_sent = 0;
-        packets_received = 0;
-        packets_lost = 0;
-        acks_received = 0;
-        acks_timeout = 0;
-        retries = 0;
-        duplicates_filtered = 0;
+        *this = EspNowStats{};
     }
 };
 
@@ -204,20 +198,9 @@ public:
                           uint8_t channel, uint16_t interval);
 
     /**
-     * @brief Send heartbeat
-     */
-    bool sendHeartbeat(const uint8_t* peer_mac, uint32_t uptime, uint8_t status);
-
-    /**
      * @brief Send ACK for received message
      */
     bool sendAck(const uint8_t* peer_mac, uint8_t sequence, MessageType type);
-
-    /**
-     * @brief Send NACK for received message
-     */
-    bool sendNack(const uint8_t* peer_mac, uint8_t sequence, MessageType type,
-                  NackReason reason, const char* message = nullptr);
 
     // ============ Peer Management ============
 
@@ -280,35 +263,6 @@ public:
      * @brief Reset statistics
      */
     void resetStats() { _stats.reset(); }
-
-    /**
-     * @brief Get packets sent count
-     */
-    uint32_t getPacketsSent() const { return _stats.packets_sent; }
-
-    /**
-     * @brief Get packets received count
-     */
-    uint32_t getPacketsReceived() const { return _stats.packets_received; }
-
-    /**
-     * @brief Get packets lost count
-     */
-    uint32_t getPacketsLost() const { return _stats.packets_lost; }
-
-    /**
-     * @brief Get delivery rate percentage
-     */
-    float getDeliveryRate() const { return _stats.getDeliveryRate(); }
-
-    // ============ Encryption ============
-
-    /**
-     * @brief Set Primary Master Key (PMK) for encryption
-     * @param pmk 16-byte key
-     * @return true if successful
-     */
-    bool setPMK(const uint8_t* pmk);
 
     // ============ Utility ============
 

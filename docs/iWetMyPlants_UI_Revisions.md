@@ -58,7 +58,7 @@ This page should be accessible from the main navigation alongside Dashboard, Rel
 
 **Current state:** The Hub Dashboard shows moisture readings from Remote nodes that have reported in, and the Devices page shows which Remotes are online.
 
-**Problem:** Battery-powered Remotes send battery voltage and percentage in their reports (`BATTERY_STATUS` message type, and battery data is included in `MULTI_SENSOR_READING`). This data is cached in `DeviceRegistry` (`battery_percent` field in `PairedDeviceInfo`). However, there's no visible battery indicator on the Dashboard or Devices page for the end user.
+**Problem:** Battery-powered Remotes send battery voltage and percentage in their reports (`BATTERY_STATUS` message type). This data is cached in `DeviceRegistry` (`battery_percent` field in `PairedDeviceInfo`). However, there's no visible battery indicator on the Dashboard or Devices page for the end user.
 
 **Requested change:** On the Hub's Devices page, add a battery indicator for each device that has reported battery data:
 - Show battery percentage with a simple icon (full/three-quarter/half/quarter/empty/charging)

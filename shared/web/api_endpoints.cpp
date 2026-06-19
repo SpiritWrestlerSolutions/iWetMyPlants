@@ -7,7 +7,6 @@
 #include "../utils/logger.h"
 #include "../config/config_manager.h"
 #include "../utils/ota_manager.h"
-#include "../utils/error_tracker.h"
 #include "../utils/admin_auth.h"
 #include <WiFi.h>
 #include <esp_system.h>
@@ -103,10 +102,8 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         const auto& progress = Ota.getProgress();
 
         doc["state"] = static_cast<int>(progress.state);
-        doc["state_name"] = progress.state == OtaState::IDLE ? "idle" :
-                           progress.state == OtaState::RECEIVING ? "receiving" :
-                           progress.state == OtaState::VERIFYING ? "verifying" :
-                           progress.state == OtaState::COMPLETE ? "complete" : "error";
+        static const char* state_names[] = {"idle", "receiving", "verifying", "complete", "error"};
+        doc["state_name"] = state_names[static_cast<int>(progress.state)];
         doc["total_size"] = progress.total_size;
         doc["received"] = progress.received;
         doc["percent"] = progress.percent;
@@ -116,39 +113,6 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
         }
 
         sendJson(request, doc);
-    });
-
-    // Error history endpoint
-    server.on("/api/system/errors", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
-
-        doc["total_errors"] = Errors.totalErrors();
-        doc["recent_count"] = Errors.count();
-        doc["has_critical"] = Errors.hasCriticalErrors();
-        doc["time_since_last_ms"] = Errors.timeSinceLastError();
-
-        JsonArray errors = doc["errors"].to<JsonArray>();
-        for (size_t i = 0; i < Errors.count(); i++) {
-            const ErrorRecord* rec = Errors.getRecord(i);
-            if (rec) {
-                JsonObject err = errors.add<JsonObject>();
-                err["code"] = static_cast<int>(rec->code);
-                err["severity"] = static_cast<int>(rec->severity);
-                err["message"] = getErrorMessage(rec->code);
-                err["context"] = rec->context;
-                err["line"] = rec->line;
-                err["timestamp_ms"] = rec->timestamp;
-            }
-        }
-
-        sendJson(request, doc);
-    });
-
-    // Clear errors endpoint
-    server.on("/api/system/errors/clear", HTTP_POST, [](AsyncWebServerRequest* request) {
-        if (!AdminAuth.require(request)) return;
-        Errors.clear();
-        sendSuccess(request, "Error history cleared");
     });
 
     // ============ Admin Auth ============
@@ -207,14 +171,8 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     server.on("/api/sensors", HTTP_GET, handleGetSensors);
 
     // Sensor by index - explicit routes for 0-15
-    static const char* sensor_paths[] = {
-        "/api/sensors/0", "/api/sensors/1", "/api/sensors/2", "/api/sensors/3",
-        "/api/sensors/4", "/api/sensors/5", "/api/sensors/6", "/api/sensors/7",
-        "/api/sensors/8", "/api/sensors/9", "/api/sensors/10", "/api/sensors/11",
-        "/api/sensors/12", "/api/sensors/13", "/api/sensors/14", "/api/sensors/15"
-    };
     for (int i = 0; i < 16; i++) {
-        server.on(sensor_paths[i], HTTP_GET, [](AsyncWebServerRequest* request) {
+        server.on((String("/api/sensors/") + i).c_str(), HTTP_GET, [](AsyncWebServerRequest* request) {
             String url = request->url();
             uint8_t idx = url.substring(url.lastIndexOf('/') + 1).toInt();
             handleGetSensor(request, idx);
@@ -222,29 +180,8 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     }
 
     // Calibration endpoints - explicit routes for sensors 0-15, dry/wet actions
-    static const char* cal_dry_paths[] = {
-        "/api/sensors/0/calibrate/dry", "/api/sensors/1/calibrate/dry",
-        "/api/sensors/2/calibrate/dry", "/api/sensors/3/calibrate/dry",
-        "/api/sensors/4/calibrate/dry", "/api/sensors/5/calibrate/dry",
-        "/api/sensors/6/calibrate/dry", "/api/sensors/7/calibrate/dry",
-        "/api/sensors/8/calibrate/dry", "/api/sensors/9/calibrate/dry",
-        "/api/sensors/10/calibrate/dry", "/api/sensors/11/calibrate/dry",
-        "/api/sensors/12/calibrate/dry", "/api/sensors/13/calibrate/dry",
-        "/api/sensors/14/calibrate/dry", "/api/sensors/15/calibrate/dry"
-    };
-    static const char* cal_wet_paths[] = {
-        "/api/sensors/0/calibrate/wet", "/api/sensors/1/calibrate/wet",
-        "/api/sensors/2/calibrate/wet", "/api/sensors/3/calibrate/wet",
-        "/api/sensors/4/calibrate/wet", "/api/sensors/5/calibrate/wet",
-        "/api/sensors/6/calibrate/wet", "/api/sensors/7/calibrate/wet",
-        "/api/sensors/8/calibrate/wet", "/api/sensors/9/calibrate/wet",
-        "/api/sensors/10/calibrate/wet", "/api/sensors/11/calibrate/wet",
-        "/api/sensors/12/calibrate/wet", "/api/sensors/13/calibrate/wet",
-        "/api/sensors/14/calibrate/wet", "/api/sensors/15/calibrate/wet"
-    };
-
     for (int i = 0; i < 16; i++) {
-        server.on(cal_dry_paths[i], HTTP_POST, [](AsyncWebServerRequest* request) {
+        server.on((String("/api/sensors/") + i + "/calibrate/dry").c_str(), HTTP_POST, [](AsyncWebServerRequest* request) {
             if (!AdminAuth.require(request)) return;
             String url = request->url();
             // Extract sensor index from URL like /api/sensors/X/calibrate/dry
@@ -263,7 +200,7 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
             }
         });
 
-        server.on(cal_wet_paths[i], HTTP_POST, [](AsyncWebServerRequest* request) {
+        server.on((String("/api/sensors/") + i + "/calibrate/wet").c_str(), HTTP_POST, [](AsyncWebServerRequest* request) {
             if (!AdminAuth.require(request)) return;
             String url = request->url();
             int start = 13;
@@ -380,12 +317,8 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     server.on("/api/relays", HTTP_GET, handleGetRelays);
 
     // Relay control routes 0-7
-    static const char* relay_paths[] = {
-        "/api/relays/0", "/api/relays/1", "/api/relays/2", "/api/relays/3",
-        "/api/relays/4", "/api/relays/5", "/api/relays/6", "/api/relays/7"
-    };
     for (int i = 0; i < 8; i++) {
-        server.on(relay_paths[i], HTTP_POST,
+        server.on((String("/api/relays/") + i).c_str(), HTTP_POST,
             [](AsyncWebServerRequest* request) {},
             nullptr,
             [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
@@ -401,14 +334,8 @@ void ApiEndpoints::registerRoutes(AsyncWebServer& server) {
     server.on("/api/devices", HTTP_GET, handleGetDevices);
 
     // Device deletion routes 0-15
-    static const char* device_paths[] = {
-        "/api/devices/0", "/api/devices/1", "/api/devices/2", "/api/devices/3",
-        "/api/devices/4", "/api/devices/5", "/api/devices/6", "/api/devices/7",
-        "/api/devices/8", "/api/devices/9", "/api/devices/10", "/api/devices/11",
-        "/api/devices/12", "/api/devices/13", "/api/devices/14", "/api/devices/15"
-    };
     for (int i = 0; i < 16; i++) {
-        server.on(device_paths[i], HTTP_DELETE,
+        server.on((String("/api/devices/") + i).c_str(), HTTP_DELETE,
             [](AsyncWebServerRequest* request) {
                 if (!AdminAuth.require(request)) return;
                 String url = request->url();
@@ -501,33 +428,6 @@ void ApiEndpoints::handleGetSensor(AsyncWebServerRequest* request, uint8_t index
     JsonObject sensor = doc.to<JsonObject>();
     buildSensorJson(sensor, index);
     sendJson(request, doc);
-}
-
-void ApiEndpoints::handlePostCalibrate(AsyncWebServerRequest* request, uint8_t index) {
-    // Parse body for action
-    // Body should be: {"action": "dry"} or {"action": "wet"}
-
-    // Note: In async handler, body is already available
-    // For simplicity, check URL parameter as fallback
-    String action = "";
-    if (request->hasParam("action")) {
-        action = request->getParam("action")->value();
-    }
-
-    if (action.isEmpty()) {
-        sendError(request, 400, "Missing action parameter (dry/wet)");
-        return;
-    }
-
-    if (s_calibration_callback) {
-        if (s_calibration_callback(index, action.c_str())) {
-            sendSuccess(request, "Calibration point set");
-        } else {
-            sendError(request, 400, "Calibration failed");
-        }
-    } else {
-        sendError(request, 501, "Calibration not available");
-    }
 }
 
 // ============ Configuration Handlers ============

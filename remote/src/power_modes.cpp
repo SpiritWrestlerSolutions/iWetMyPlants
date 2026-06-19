@@ -15,7 +15,6 @@ static constexpr const char* TAG = "Power";
 
 // RTC memory variables - persist across deep sleep
 RTC_DATA_ATTR uint32_t rtc_boot_count = 0;
-RTC_DATA_ATTR uint32_t rtc_last_successful_send = 0;
 RTC_DATA_ATTR uint8_t rtc_consecutive_failures = 0;
 RTC_DATA_ATTR uint32_t rtc_total_sleep_time = 0;
 
@@ -195,7 +194,6 @@ uint32_t PowerModes::calculateOptimalSleepDuration() const {
 }
 
 void PowerModes::recordSuccessfulSend() {
-    rtc_last_successful_send = millis() / 1000;
     rtc_consecutive_failures = 0;
     LOG_D(TAG, "Recorded successful send");
 }

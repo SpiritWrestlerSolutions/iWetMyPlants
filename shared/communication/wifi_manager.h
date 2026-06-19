@@ -123,28 +123,6 @@ public:
      */
     void loop();
 
-    /**
-     * @brief Get MAC address as string
-     * @return MAC address string (format: AABBCCDDEEFF)
-     */
-    String getMacAddress() const;
-
-    /**
-     * @brief Scan for available networks
-     * @return Number of networks found
-     */
-    int16_t scanNetworks();
-
-    /**
-     * @brief Get scanned network info
-     * @param index Network index
-     * @param ssid Output SSID
-     * @param rssi Output RSSI
-     * @param encrypted Output encryption status
-     * @return true if valid index
-     */
-    bool getScannedNetwork(uint8_t index, String& ssid, int32_t& rssi, bool& encrypted);
-
 private:
     WifiConfig _config;
     WifiState _state = WifiState::DISCONNECTED;

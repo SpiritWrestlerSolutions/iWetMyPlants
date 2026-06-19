@@ -82,7 +82,6 @@ struct SensorReadings {
  */
 using MqttConnectCallback = std::function<void(bool session_present)>;
 using MqttDisconnectCallback = std::function<void(AsyncMqttClientDisconnectReason reason)>;
-using MqttMessageCallback = std::function<void(const char* topic, const char* payload, size_t len)>;
 using RelayCommandCallback = std::function<void(uint8_t relay_index, bool state, uint32_t duration)>;
 
 /**
@@ -151,11 +150,6 @@ public:
      */
     void publishDiscovery();
 
-    /**
-     * @brief Remove all HA discovery configs (for clean unpair)
-     */
-    void removeDiscovery();
-
     void removeMoistureDiscovery(uint8_t sensor_index);
     void removeTemperatureDiscovery();
     void removeHumidityDiscovery();
@@ -180,11 +174,6 @@ public:
      * @brief Publish discovery for relay switch
      */
     void publishRelayDiscovery(uint8_t relay_index, const char* relay_name);
-
-    /**
-     * @brief Publish discovery for battery sensor
-     */
-    void publishBatteryDiscovery();
 
     /**
      * @brief Publish discovery for signal strength sensor
@@ -254,31 +243,11 @@ public:
     void onDisconnect(MqttDisconnectCallback callback);
 
     /**
-     * @brief Set message callback
-     */
-    void onMessage(MqttMessageCallback callback);
-
-    /**
      * @brief Set relay command callback
      */
     void onRelayCommand(RelayCommandCallback callback);
 
     // ============ Topic Builders ============
-
-    /**
-     * @brief Get state topic
-     */
-    String getStateTopic() const;
-
-    /**
-     * @brief Get availability topic
-     */
-    String getAvailabilityTopic() const;
-
-    /**
-     * @brief Get command topic for entity
-     */
-    String getCommandTopic(const char* entity) const;
 
     /**
      * @brief Get discovery topic for entity
@@ -309,7 +278,6 @@ private:
     // Callbacks
     MqttConnectCallback _connect_callback = nullptr;
     MqttDisconnectCallback _disconnect_callback = nullptr;
-    MqttMessageCallback _message_callback = nullptr;
     RelayCommandCallback _relay_callback = nullptr;
 
     // Cached topics
@@ -329,8 +297,6 @@ private:
     String buildTemperatureDiscoveryPayload() const;
     String buildHumidityDiscoveryPayload() const;
     String buildRelayDiscoveryPayload(uint8_t relay_index, const char* relay_name) const;
-    String buildBatteryDiscoveryPayload() const;
-    String buildBatteryVoltageDiscoveryPayload() const;
     String buildRssiDiscoveryPayload() const;
 
     // Helpers

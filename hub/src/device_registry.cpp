@@ -95,20 +95,10 @@ void DeviceRegistry::updateLastSeen(const uint8_t* mac, int8_t rssi) {
     }
 }
 
-void DeviceRegistry::updateReadings(const uint8_t* mac, uint8_t moisture,
-                                     float temp, float humidity, uint8_t battery) {
+void DeviceRegistry::updateReadings(const uint8_t* mac, uint8_t moisture) {
     RegisteredDevice* dev = getDevice(mac);
     if (dev) {
         dev->last_moisture_percent = moisture;
-        if (!isnan(temp)) {
-            dev->last_temperature = temp;
-        }
-        if (!isnan(humidity)) {
-            dev->last_humidity = humidity;
-        }
-        if (battery != 255) {
-            dev->last_battery_percent = battery;
-        }
         dev->last_seen = millis() / 1000;
         dev->online = true;
     }

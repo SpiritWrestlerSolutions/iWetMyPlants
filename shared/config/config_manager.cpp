@@ -138,9 +138,6 @@ bool ConfigManager::save() {
     LOG_I(TAG, "Saved config (%u bytes, CRC=0x%08X)",
                   sizeof(DeviceConfig), _config.crc32);
 
-    // Notify listeners
-    notifyChange();
-
     return true;
 }
 
@@ -161,7 +158,6 @@ bool ConfigManager::resetToDefaults(bool save_immediately) {
         return save();
     }
 
-    notifyChange();
     return true;
 }
 
@@ -308,12 +304,6 @@ void ConfigManager::setCalibration(uint8_t index, uint16_t dry_value, uint16_t w
     }
 }
 
-// ============ Callbacks ============
-
-void ConfigManager::onConfigChange(ConfigChangeCallback callback) {
-    _change_callback = callback;
-}
-
 // ============ Validation ============
 
 bool ConfigManager::validate() const {
@@ -379,64 +369,6 @@ bool ConfigManager::migrate() {
     return true;
 }
 
-// ============ Debug ============
-
-void ConfigManager::printConfig() const {
-    LOG_D(TAG, "======== Device Configuration ========");
-    LOG_D(TAG, "Magic: 0x%08X", _config.magic);
-    LOG_D(TAG, "Version: %u", _config.config_version);
-    LOG_D(TAG, "Size: %u bytes", sizeof(DeviceConfig));
-    LOG_D(TAG, "CRC32: 0x%08X", _config.crc32);
-    LOG_D(TAG, "--- Identity ---");
-    LOG_D(TAG, "  Name: %s", _config.identity.device_name);
-    LOG_D(TAG, "  ID: %s", _config.identity.device_id);
-    LOG_D(TAG, "  Type: %u", _config.identity.device_type);
-    LOG_D(TAG, "  Firmware: %s", _config.identity.firmware_version);
-    LOG_D(TAG, "--- WiFi ---");
-    LOG_D(TAG, "  SSID: %s", _config.wifi.ssid[0] ? _config.wifi.ssid : "(not set)");
-    LOG_D(TAG, "  Static IP: %s", _config.wifi.use_static_ip ? "yes" : "no");
-    LOG_D(TAG, "  Channel: %u", _config.wifi.wifi_channel);
-    LOG_D(TAG, "--- MQTT ---");
-    LOG_D(TAG, "  Enabled: %s", _config.mqtt.enabled ? "yes" : "no");
-    LOG_D(TAG, "  Broker: %s:%u", _config.mqtt.broker, _config.mqtt.port);
-    LOG_D(TAG, "  Base Topic: %s", _config.mqtt.base_topic);
-    LOG_D(TAG, "  HA Discovery: %s", _config.mqtt.ha_discovery_enabled ? "yes" : "no");
-    LOG_D(TAG, "--- ESP-NOW ---");
-    LOG_D(TAG, "  Enabled: %s", _config.espnow.enabled ? "yes" : "no");
-    LOG_D(TAG, "  Channel: %u", _config.espnow.channel);
-    LOG_D(TAG, "  Hub MAC: %02X:%02X:%02X:%02X:%02X:%02X",
-                  _config.espnow.hub_mac[0], _config.espnow.hub_mac[1],
-                  _config.espnow.hub_mac[2], _config.espnow.hub_mac[3],
-                  _config.espnow.hub_mac[4], _config.espnow.hub_mac[5]);
-    LOG_D(TAG, "--- Moisture Sensors ---");
-    for (uint8_t i = 0; i < IWMP_MAX_SENSORS; i++) {
-        const auto& sensor = _config.moisture_sensors[i];
-        if (sensor.enabled) {
-            LOG_D(TAG, "  [%u] %s: pin=%u, dry=%u, wet=%u",
-                          i, sensor.sensor_name, sensor.adc_pin,
-                          sensor.dry_value, sensor.wet_value);
-        }
-    }
-    if (_config.identity.device_type == static_cast<uint8_t>(DeviceType::GREENHOUSE)) {
-        LOG_D(TAG, "--- Relays ---");
-        for (uint8_t i = 0; i < IWMP_MAX_RELAYS; i++) {
-            const auto& relay = _config.relays[i];
-            if (relay.enabled) {
-                LOG_D(TAG, "  [%u] %s: pin=%u, active_low=%s",
-                              i, relay.relay_name, relay.gpio_pin,
-                              relay.active_low ? "yes" : "no");
-            }
-        }
-    }
-    if (_config.identity.device_type == static_cast<uint8_t>(DeviceType::REMOTE)) {
-        LOG_D(TAG, "--- Power ---");
-        LOG_D(TAG, "  Battery Powered: %s", _config.power.battery_powered ? "yes" : "no");
-        LOG_D(TAG, "  Sleep Duration: %u sec", _config.power.deep_sleep_duration_sec);
-        LOG_D(TAG, "  Low Battery: %.2fV", _config.power.low_battery_voltage);
-    }
-    LOG_D(TAG, "======================================");
-}
-
 // ============ Private Methods ============
 
 void ConfigManager::generateDeviceId() {
@@ -464,12 +396,6 @@ bool ConfigManager::verifyCrc() const {
 void ConfigManager::updateCrc() {
     _config.crc32 = 0;  // Zero out before calculation
     _config.crc32 = calculateCrc();
-}
-
-void ConfigManager::notifyChange() {
-    if (_change_callback) {
-        _change_callback(_config);
-    }
 }
 
 } // namespace iwmp

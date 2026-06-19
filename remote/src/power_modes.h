@@ -18,7 +18,6 @@ namespace iwmp {
 
 // RTC memory data - persists across deep sleep
 extern RTC_DATA_ATTR uint32_t rtc_boot_count;
-extern RTC_DATA_ATTR uint32_t rtc_last_successful_send;
 extern RTC_DATA_ATTR uint8_t rtc_consecutive_failures;
 extern RTC_DATA_ATTR uint32_t rtc_total_sleep_time;
 
@@ -32,12 +31,6 @@ public:
      * @param config Power configuration
      */
     void begin(const PowerConfig& config);
-
-    /**
-     * @brief Get wake reason
-     * @return ESP sleep wake cause
-     */
-    esp_sleep_wakeup_cause_t getWakeReason() const { return _wake_reason; }
 
     /**
      * @brief Get wake reason as string
@@ -124,22 +117,10 @@ public:
     void recordFailedSend();
 
     /**
-     * @brief Get boot count
-     * @return Number of boots since power on
-     */
-    uint32_t getBootCount() const { return rtc_boot_count; }
-
-    /**
      * @brief Get consecutive failures
      * @return Number of consecutive send failures
      */
     uint8_t getConsecutiveFailures() const { return rtc_consecutive_failures; }
-
-    /**
-     * @brief Get total sleep time
-     * @return Total time spent sleeping in seconds
-     */
-    uint32_t getTotalSleepTime() const { return rtc_total_sleep_time; }
 
     /**
      * @brief Prepare for sleep (disable peripherals, etc.)

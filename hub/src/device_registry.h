@@ -79,13 +79,8 @@ public:
      * @brief Update device readings
      * @param mac Device MAC address
      * @param moisture Moisture percentage
-     * @param temp Temperature (NAN if not available)
-     * @param humidity Humidity (NAN if not available)
-     * @param battery Battery percentage (255 if not available)
      */
-    void updateReadings(const uint8_t* mac, uint8_t moisture,
-                        float temp = NAN, float humidity = NAN,
-                        uint8_t battery = 255);
+    void updateReadings(const uint8_t* mac, uint8_t moisture);
 
     /**
      * @brief Iterate all devices
@@ -109,12 +104,6 @@ public:
      * @brief Check device timeouts and update online status
      */
     void checkTimeouts();
-
-    /**
-     * @brief Set offline timeout
-     * @param timeout_sec Timeout in seconds
-     */
-    void setOfflineTimeout(uint32_t timeout_sec) { _offline_timeout_sec = timeout_sec; }
 
     // ============ Persistence ============
 

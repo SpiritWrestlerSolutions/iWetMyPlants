@@ -325,19 +325,6 @@ bool EspNowManager::sendPairResponse(const uint8_t* peer_mac, bool accepted,
     return send(peer_mac, (uint8_t*)&msg, sizeof(msg));
 }
 
-bool EspNowManager::sendHeartbeat(const uint8_t* peer_mac, uint32_t uptime, uint8_t status) {
-    HeartbeatMsg msg;
-    memset(&msg, 0, sizeof(msg));
-
-    initMessageHeader(msg.header, MessageType::HEARTBEAT, _own_mac, getNextSequence());
-    msg.uptime_sec = uptime;
-    msg.status = status;
-    msg.rssi = WiFi.RSSI();
-    msg.free_heap = ESP.getFreeHeap() / 1024;
-
-    return send(peer_mac, (uint8_t*)&msg, sizeof(msg));
-}
-
 bool EspNowManager::sendAck(const uint8_t* peer_mac, uint8_t sequence, MessageType type) {
     AckMsg msg;
     memset(&msg, 0, sizeof(msg));
@@ -345,22 +332,6 @@ bool EspNowManager::sendAck(const uint8_t* peer_mac, uint8_t sequence, MessageTy
     initMessageHeader(msg.header, MessageType::ACK, _own_mac, getNextSequence());
     msg.acked_sequence = sequence;
     msg.acked_type = type;
-
-    return send(peer_mac, (uint8_t*)&msg, sizeof(msg));
-}
-
-bool EspNowManager::sendNack(const uint8_t* peer_mac, uint8_t sequence, MessageType type,
-                              NackReason reason, const char* message) {
-    NackMsg msg;
-    memset(&msg, 0, sizeof(msg));
-
-    initMessageHeader(msg.header, MessageType::NACK, _own_mac, getNextSequence());
-    msg.nacked_sequence = sequence;
-    msg.nacked_type = type;
-    msg.reason = reason;
-    if (message) {
-        strncpy(msg.message, message, sizeof(msg.message) - 1);
-    }
 
     return send(peer_mac, (uint8_t*)&msg, sizeof(msg));
 }
@@ -462,16 +433,6 @@ void EspNowManager::onSendComplete(SendCompleteCallback callback) {
 
 void EspNowManager::onMessage(MessageCallback callback) {
     _message_callback = callback;
-}
-
-// ============ Encryption ============
-
-bool EspNowManager::setPMK(const uint8_t* pmk) {
-    if (!_initialized) {
-        return false;
-    }
-
-    return esp_now_set_pmk(pmk) == ESP_OK;
 }
 
 // ============ Utility ============

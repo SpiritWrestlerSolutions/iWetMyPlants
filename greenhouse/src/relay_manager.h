@@ -56,13 +56,6 @@ public:
     bool turnOff(uint8_t index);
 
     /**
-     * @brief Toggle relay state
-     * @param index Relay index
-     * @return true if successful
-     */
-    bool toggle(uint8_t index);
-
-    /**
      * @brief Check if relay is on
      * @param index Relay index
      * @return true if on
@@ -75,13 +68,6 @@ public:
      * @return Relay state structure
      */
     const RelayState& getState(uint8_t index) const;
-
-    /**
-     * @brief Get relay configuration
-     * @param index Relay index
-     * @return Relay configuration
-     */
-    const RelayConfig& getConfig(uint8_t index) const;
 
     /**
      * @brief Get relay count
@@ -107,20 +93,6 @@ public:
      * @param index Relay index
      */
     void clearLockout(uint8_t index);
-
-    /**
-     * @brief Check if relay is locked out
-     * @param index Relay index
-     * @return true if locked out
-     */
-    bool isLockedOut(uint8_t index) const;
-
-    /**
-     * @brief Get lockout reason
-     * @param index Relay index
-     * @return Lockout reason string
-     */
-    const char* getLockoutReason(uint8_t index) const;
 
 private:
     RelayConfig _configs[IWMP_MAX_RELAYS];

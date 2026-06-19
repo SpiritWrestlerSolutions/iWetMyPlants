@@ -42,7 +42,6 @@ public:
     bool isOverrideActive() const { return _override_active; }
 
     // Sensor data (used by RemoteWeb)
-    uint8_t getSensorCount() const { return _sensor_count; }
     uint8_t getLastMoisturePercent(uint8_t idx = 0) const {
         return (idx < IWMP_MAX_SENSORS) ? _last_moisture_percent[idx] : 0;
     }
@@ -71,12 +70,6 @@ public:
 
     // External trigger (e.g. button hold)
     void enterConfigMode();
-
-    /**
-     * @brief Get boot count (number of wakes since power-on)
-     * @return Boot count
-     */
-    uint32_t getBootCount() const { return _power.getBootCount(); }
 
 private:
     RemoteState _state = RemoteState::BOOT;
