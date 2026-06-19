@@ -36,6 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Installer
 - **Ping result tags the device version** with `↑ upgrade available` / `↓ newer than published` / `✓ up to date` so users can tell at a glance whether OTA-flashing the bundled `.bin` would be an upgrade, downgrade, or no-op.
+- **Fixed invalid esp-web-tools manifest field.** Manifests used `improv_wifi_serial_timeout` (silently ignored); renamed to the valid `new_install_improv_wait_time` so the post-flash WiFi-config dialog timing is actually honored.
+- **Fixed two CSS glitches:** the sticky nav docked under the header (height mismatch), and the device-selector hid its scrollbar without ever enabling horizontal scroll.
+- **Visual overhaul ("Botanical Editorial").** Fraunces + Nunito Sans typography, a warm forest/terracotta/gold/sage palette with a real dark mode (removes the white logo band that glared in dark mode), a cohesive custom line-icon set replacing all emoji, softer layered shadows, and a restrained staggered load animation. All install/OTA/feedback functionality unchanged.
 
 ### Developer hygiene
 - **Dead-code sweep (−~2,000 lines across 40 files; 5 files deleted).** Removed unreferenced subsystems and methods across comms, sensors, web, config, and controllers: the error tracker (and its always-empty `GET /api/system/errors` endpoint), the `rapid_read` calibration stubs, `error_codes.h`'s `getHttpStatus()` HTTP mapping, the `MuxManager` registry, the WebServer device-callback layer, and assorted unused MQTT / ESP-NOW / WiFi / sensor / watchdog / config accessors. No behavioral change; all three targets build green (Flash −7–10 KB, RAM ~−0.8 KB per target).
