@@ -1,0 +1,41 @@
+name: CI
+
+# Every branch push and pull request: run the logic tests and build both chips.
+# Nothing is deployed from here. Releases get their own job, triggered by v* tags (M6).
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # version.py counts commits; a shallow clone makes every build "+1"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - run: pip install platformio==6.2.0
+
+      - name: Logic tests
+        run: pio test -e native
+
+      - name: Build both chips
+        run: pio run -e esp32 -e esp32c3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            .pio/build/esp32/firmware.bin
+            .pio/build/esp32c3/firmware.bin
+          retention-days: 14
