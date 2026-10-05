@@ -80,6 +80,7 @@ void startSetup() {
   // connected phone (and, on the C3, the access point with it).
   WiFi.setAutoReconnect(false);
   WiFi.mode(WIFI_STA);
+  WiFi.waitStatusBits(STA_STARTED_BIT, 1000);   // first boot: the radio may still be starting
   WiFi.disconnect();
   keepScan(WiFi.scanNetworks());
 
