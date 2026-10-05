@@ -63,6 +63,8 @@ struct Config {
   float bat_ratio;           // divider ratio; the calibration knob for the battery reading
 };
 
+extern Config cfg;               // the live config (main.cpp)
+
 // ---- config.cpp ----------------------------------------------------------------------------
 void configDefaults(Config& c);
 // Applies the keys present in `in` on top of `c`. Returns nullptr on success, otherwise a
@@ -73,3 +75,15 @@ void configToJson(const Config& c, JsonObject out, bool secrets);
 bool configLoad(Config& c);     // false = nothing saved yet (defaults in place)
 bool configSave(const Config& c);
 void configErase();
+
+// ---- wifi.cpp ------------------------------------------------------------------------------
+const char* deviceId();         // "iwmp-a1b2c3": hostname, setup network suffix
+void wifiBegin();
+void wifiLoop();
+bool wifiConnected();
+bool wifiSetupMode();           // the setup network is open
+void wifiScanJson(JsonObject out);
+
+// ---- web.cpp -------------------------------------------------------------------------------
+void webBegin();
+void webLoop();
