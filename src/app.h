@@ -14,9 +14,11 @@ inline constexpr int8_t RELAY_DEFAULT_PINS[] = {5, 20, 10, 7};
 constexpr int8_t SDA_PIN = 6, SCL_PIN = 7, BOOT_PIN = 9;    // not 8/9: LED and BOOT button
 #else
 constexpr int MAX_SENSORS = 6, MAX_RELAYS = 8;
-inline constexpr int8_t ADC_PINS[] = {32, 33, 34, 35, 36, 39};
+// Sensor slots S1-S6 follow the DevKit header top to bottom (docs/HARDWARE.md). S5/S6 sit on
+// 32/33, the only two that can also be outputs, so fewer sensors frees them first.
+inline constexpr int8_t ADC_PINS[] = {36, 39, 34, 35, 32, 33};
 inline constexpr int8_t OUT_PINS[] = {4, 13, 16, 17, 18, 19, 23, 25, 26, 27, 32, 33};
-inline constexpr int8_t RELAY_DEFAULT_PINS[] = {16, 17, 18, 19, 23, 25, 26, 27};  // v1 wiring
+inline constexpr int8_t RELAY_DEFAULT_PINS[] = {16, 17, 18, 19, 23, 25, 26, 27};  // R1-R8, v1 wiring
 constexpr int8_t SDA_PIN = 21, SCL_PIN = 22, BOOT_PIN = 0;
 #endif
 

@@ -61,7 +61,7 @@ static void test_absent_keys_keep_their_values() {
   TEST_ASSERT_NULL(apply(c, R"({"name": "Kitchen", "sensors": [{"name": "Basil"}]})"));
   TEST_ASSERT_EQUAL_STRING("secret1234", c.wifi_pass);   // not sent: kept
   TEST_ASSERT_EQUAL_STRING("Basil", c.s[0].name);
-  TEST_ASSERT_EQUAL(32, c.s[0].pin);                     // rest of the slot untouched
+  TEST_ASSERT_EQUAL(36, c.s[0].pin);                     // rest of the slot untouched
   TEST_ASSERT_NULL(apply(c, R"({"wifi_pass": ""})"));    // sent empty: cleared (open network)
   TEST_ASSERT_EQUAL_STRING("", c.wifi_pass);
 }
@@ -80,9 +80,11 @@ static void test_relay_needs_a_safe_output_pin() {
 }
 
 static void test_a_pin_can_only_be_used_once() {
-  Config c = fresh();   // sensor 1 is on 32 by default
-  ASSERT_REFUSED(c, R"({"relays": [{"en": true, "pin": 32}]})", "Sensor 1 and Relay 1 both use pin 32");
-  ASSERT_REFUSED(c, R"({"bat_pin": 32})", "both use pin 32");
+  Config c = fresh();   // S1 is on 36, S5 on 32
+  ASSERT_REFUSED(c, R"({"sensors": [{}, {}, {}, {}, {"en": true}], "relays": [{"en": true, "pin": 32}]})",
+                 "Sensor 5 and Relay 1 both use pin 32");
+  ASSERT_REFUSED(c, R"({"bat_pin": 36})", "Sensor 1 and Battery both use pin 36");
+  TEST_ASSERT_NULL(apply(c, R"({"relays": [{"en": true, "pin": 32}]})"));   // S5 off: 32 is free
 }
 
 static void test_relay_must_follow_a_sensor_that_is_on() {
