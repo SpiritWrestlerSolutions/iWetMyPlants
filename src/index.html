@@ -42,8 +42,8 @@ h2 { font-family: var(--display); font-size: 1.2rem; font-weight: 600; color: va
 label { display: block; font-size: .85rem; font-weight: 700; color: var(--heading); margin-bottom: .9rem; }
 label:last-child { margin-bottom: 0; }
 label.check { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
-input[type=text], input[type=password], input[type=file] { display: block; width: 100%; margin-top: .35rem; padding: .6rem .75rem; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-weight: 400; }
-input:focus-visible, button:focus-visible, a:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 28%, transparent); }
+input[type=text], input[type=password], input[type=number], input[type=file], select { display: block; width: 100%; margin-top: .35rem; padding: .6rem .75rem; border: 1.5px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-weight: 400; }
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 28%, transparent); }
 .btn { display: inline-flex; align-items: center; justify-content: center; padding: .6rem 1.2rem; border: 1.5px solid transparent; border-radius: 8px; font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer; background: var(--brand); color: #FBF7EC; }
 .btn:hover { background: var(--brand-deep); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -63,6 +63,26 @@ dd { font-weight: 600; overflow-wrap: anywhere; }
 .msg.err { background: var(--err-bg); color: var(--err); }
 .msg.info { background: var(--sage-soft); color: var(--brand); }
 progress { width: 100%; height: .6rem; accent-color: var(--brand); margin-top: .8rem; }
+/* plant cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 1rem; }
+.plant { padding: 1rem 1.1rem; }
+.plant .top { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; }
+.plant .name { font-weight: 700; color: var(--heading); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.port { font-weight: 700; color: var(--brand); }
+.big { font-family: var(--display); font-size: 2.4rem; line-height: 1.15; color: var(--heading); }
+.bar { height: .45rem; border-radius: 999px; background: var(--sage-soft); overflow: hidden; margin: .35rem 0 .5rem; }
+.bar i { display: block; height: 100%; background: var(--brand); }
+.plant.attn .bar i { background: var(--warn); }
+.note { font-size: .82rem; color: var(--muted); }
+.note.warn { color: var(--warn); font-weight: 700; }
+.note.err { color: var(--err); font-weight: 700; }
+/* sensor setup */
+.slot { padding: .85rem 0; border-top: 1px solid var(--line); }
+.slot:first-of-type { border-top: 0; padding-top: 0; }
+.slot > label.check { margin-bottom: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0 1rem; margin-top: .7rem; }
+.fields .row { grid-column: 1 / -1; }
+.live { display: flex; align-items: baseline; gap: 1.2rem; margin: .4rem 0 .8rem; }
 #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--bg) 88%, transparent); }
 #overlay .card { max-width: 26rem; }
 [hidden] { display: none !important; }
@@ -78,16 +98,68 @@ progress { width: 100%; height: .6rem; accent-color: var(--brand); margin-top: .
 </header>
 <nav aria-label="Pages">
   <a href="#home">Home</a>
+  <a href="#sensors">Sensors</a>
   <a href="#settings">Settings</a>
   <a href="#system">System</a>
 </nav>
 
 <main>
   <section id="home" hidden>
+    <div class="cards" id="cards"></div>
+    <p class="note" id="read-note"></p>
+    <div class="card" id="air" hidden>
+      <h2>Air</h2>
+      <dl id="air-list"></dl>
+    </div>
     <div class="card">
       <h2>This unit</h2>
       <dl id="unit"></dl>
     </div>
+  </section>
+
+  <section id="sensors" hidden>
+    <div class="card" id="cal" hidden>
+      <h2 id="cal-title">Calibrate</h2>
+      <p class="hint">1. Hold the sensor in dry air (or push it into dry soil) and wait until the number stops moving, then press <b>Set dry</b>.<br>
+        2. Stand it in a glass of water up to the line on the sensor, keeping the electronics dry. Wait again, then press <b>Set wet</b>.<br>
+        The percentage uses the saved points, so you can check it straight away.</p>
+      <div class="live"><span class="big" id="cal-pct">—</span><span class="note" id="cal-mv"></span></div>
+      <p class="msg err" id="cal-clip" hidden>This reading is at the top of what this chip can measure. Take the dry point in dry soil instead of air.</p>
+      <dl id="cal-points"></dl>
+      <p class="msg" id="cal-msg" hidden></p>
+      <div class="row" style="margin-top:.9rem">
+        <button class="btn" id="cal-dry" type="button">Set dry</button>
+        <button class="btn" id="cal-wet" type="button">Set wet</button>
+        <button class="btn outline" id="cal-reset" type="button">Reset points</button>
+        <button class="btn outline" id="cal-done" type="button">Done</button>
+      </div>
+    </div>
+
+    <form id="sensor-form" novalidate>
+      <div class="card">
+        <h2>Moisture sensors</h2>
+        <p class="hint">Turn on the ports you've plugged a sensor into. S1 to S6 match the labels in the wiring guide.</p>
+        <div id="slots"></div>
+      </div>
+      <div class="card">
+        <h2>Reading</h2>
+        <label>Read the sensors every <select id="read_s"></select></label>
+        <label>Sensor power pin <select id="pwr_pin"></select></label>
+        <p class="hint">Only if the sensors are powered through a switch (SPWR in the wiring guide). Otherwise leave it at "Always on".</p>
+        <label>Warm-up after power-on (ms) <input type="number" id="warmup" min="0" max="5000" step="50"></label>
+      </div>
+      <div class="card">
+        <h2>Temperature and humidity</h2>
+        <label>Sensor <select id="sht">
+          <option value="0">None</option>
+          <option value="3">SHT3x (SHT30, SHT31, SHT35)</option>
+          <option value="4">SHT4x (SHT40, SHT41, SHT45)</option>
+        </select></label>
+        <p class="hint" id="sht-pins"></p>
+      </div>
+      <p class="msg" id="sensor-msg" hidden></p>
+      <div class="row"><button class="btn" id="sensor-save">Save and restart</button></div>
+    </form>
   </section>
 
   <section id="settings" hidden>
@@ -190,6 +262,7 @@ function show() {
   for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== tab;
   for (const a of document.querySelectorAll('nav a'))
     a.hash === '#' + tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current');
+  if (tab !== 'sensors') closeCal();
 }
 addEventListener('hashchange', show);
 
@@ -202,6 +275,7 @@ async function refresh() {
   document.title = name + ' · iWetMyPlants';
   $('#status').textContent = w.setup ? 'Setup mode' : w.ip ? 'Online' : 'Joining WiFi…';
   $('#status').className = 'pill' + (w.ip ? '' : ' warn');
+  renderPlants();
   list($('#unit'), [
     ['Name', state.name || 'Not set yet'],
     ['WiFi', w.setup ? 'Setup network is open' : w.ip ? `${w.ssid} (${signal(w.rssi)} signal)` : `Trying "${w.ssid}"…`],
@@ -216,9 +290,131 @@ async function refresh() {
   ]);
 }
 
+// ---- home: one card per sensor ----
+function ago(s) { return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`; }
+
+function renderPlants() {
+  const on = state.sensors.map((s, i) => ({ ...s, port: `S${i + 1}` })).filter(s => s.on);
+  $('#cards').replaceChildren(...on.map(s => {
+    const pct = s.pct >= 0 ? s.pct : null;
+    const [note, kind] =
+      s.fault ? ['Check the sensor: this reading is far outside its calibration', 'err'] :
+      pct === null ? ['Needs calibrating', 'warn'] :
+      s.low ? ['Needs water', 'warn'] :
+      !s.calibrated ? ['Not calibrated yet', ''] : ['OK', ''];
+    const fill = el('i');
+    fill.style.width = (pct ?? 0) + '%';
+    return el('div', { className: 'card plant' + (s.low || s.fault ? ' attn' : '') },
+      el('div', { className: 'top' }, el('span', { className: 'name', textContent: s.name || s.port }),
+        el('span', { className: 'port', textContent: s.port })),
+      el('div', { className: 'big', textContent: pct === null ? '—' : pct + '%' }),
+      el('div', { className: 'bar' }, fill),
+      el('div', { className: 'note ' + kind, textContent: note }));
+  }));
+  if (!on.length) $('#cards').append(el('div', { className: 'card' },
+    el('p', { className: 'hint', textContent: 'No sensors are turned on yet. Set them up on the ' },
+      el('a', { href: '#sensors', textContent: 'Sensors page' }), '.')));
+  $('#read-note').textContent = on.length && state.read_age >= 0 ? `Read ${ago(state.read_age)} ago.` : '';
+  $('#air').hidden = state.temp === undefined;
+  if (state.temp !== undefined) list($('#air-list'), [['Temperature', `${state.temp} °C`], ['Humidity', `${state.rh} %`]]);
+}
+
+// ---- sensors page ----
+let slots = [];
+
+function renderSensorForm() {
+  slots = config.sensors.map((s, i) => {
+    const en = el('input', { type: 'checkbox', checked: s.en });
+    const name = el('input', { type: 'text', value: s.name, maxLength: 23 });
+    const pin = el('select', {}, ...config.pins.adc.map(p => el('option', { value: p, textContent: `GPIO ${p}`, selected: p === s.pin })));
+    const warn = el('input', { type: 'number', value: s.warn, min: 0, max: 100 });
+    const fields = el('div', { className: 'fields' },
+      el('label', {}, 'Name', name), el('label', {}, 'Pin', pin), el('label', {}, 'Needs water below (%)', warn),
+      el('div', { className: 'row' }, el('button', { type: 'button', className: 'btn outline', textContent: 'Calibrate', onclick: () => openCal(i) })));
+    fields.hidden = !s.en;
+    en.onchange = () => { fields.hidden = !en.checked; };
+    return { en, name, pin, warn, row: el('div', { className: 'slot' },
+      el('label', { className: 'check' }, en, el('span', { className: 'port', textContent: `S${i + 1}` }), ` ${s.en ? s.name : 'off'}`), fields) };
+  });
+  $('#slots').replaceChildren(...slots.map(x => x.row));
+
+  const every = [[10, '10 seconds (testing)'], [30, '30 seconds'], [60, 'minute'], [300, '5 minutes'], [900, '15 minutes'], [1800, '30 minutes'], [3600, 'hour']];
+  if (!every.some(([v]) => v === config.read_s)) every.push([config.read_s, `${config.read_s} seconds`]);
+  $('#read_s').replaceChildren(...every.map(([v, t]) => el('option', { value: v, textContent: t, selected: v === config.read_s })));
+  $('#pwr_pin').replaceChildren(el('option', { value: -1, textContent: 'Always on' }),
+    ...config.pins.out.map(p => el('option', { value: p, textContent: `GPIO ${p}`, selected: p === config.pwr_pin })));
+  $('#warmup').value = config.warmup_ms;
+  $('#sht').value = config.sht;
+  $('#sht-pins').textContent = `Wire it to SDA (GPIO ${config.pins.sda}) and SCL (GPIO ${config.pins.scl}).`;
+}
+
+$('#sensor-form').onsubmit = async e => {
+  e.preventDefault();
+  const body = {
+    read_s: +$('#read_s').value, pwr_pin: +$('#pwr_pin').value, sht: +$('#sht').value,
+    warmup_ms: Math.round(+$('#warmup').value),
+    sensors: slots.map(x => ({ en: x.en.checked, name: x.name.value.trim(), pin: +x.pin.value, warn: Math.round(+x.warn.value) })),
+  };
+  $('#sensor-save').disabled = true;
+  try {
+    await api('/api/config', body);
+    restarting('Saved. The unit is restarting; this page reloads when it\'s back.');
+  } catch (err) {
+    say('#sensor-msg', err.message, 'err');
+  } finally {
+    $('#sensor-save').disabled = false;
+  }
+};
+
+// Calibration: reads every second while open (?live=1), and the unit captures its own reading on each button.
+let calSlot = -1, calTimer;
+
+function openCal(i) {
+  if (!config.sensors[i].en) return say('#sensor-msg', `Turn S${i + 1} on and save first, then calibrate it.`, 'err');
+  calSlot = i;
+  $('#cal-title').textContent = `Calibrate S${i + 1}: ${config.sensors[i].name}`;
+  say('#cal-msg', '', '');
+  $('#cal').hidden = false;
+  $('#cal').scrollIntoView({ behavior: 'smooth' });
+  calTick();
+}
+
+function closeCal() {
+  calSlot = -1;
+  clearTimeout(calTimer);
+  $('#cal').hidden = true;
+}
+
+async function calTick() {
+  clearTimeout(calTimer);
+  if (calSlot < 0) return;
+  try {
+    const s = (await api('/api/state?live=1')).sensors[calSlot];
+    $('#cal-pct').textContent = s.pct >= 0 ? s.pct + '%' : '—';
+    $('#cal-mv').textContent = s.mv >= 0 ? `${s.mv} mV` : '';
+    $('#cal-clip').hidden = !s.clipped;
+    list($('#cal-points'), [['Dry point', `${s.dry} mV`], ['Wet point', `${s.wet} mV`]]);
+  } catch {}
+  if (calSlot >= 0) calTimer = setTimeout(calTick, 1000);
+}
+
+async function calSet(point) {
+  try {
+    const r = await api('/api/calibrate', { sensor: calSlot, point });
+    say('#cal-msg', point === 'reset' ? 'Back to the default points.' : `${point === 'dry' ? 'Dry' : 'Wet'} point saved at ${r[point]} mV.`, 'ok');
+  } catch (err) {
+    say('#cal-msg', err.message, 'err');
+  }
+}
+$('#cal-dry').onclick = () => calSet('dry');
+$('#cal-wet').onclick = () => calSet('wet');
+$('#cal-reset').onclick = () => confirm('Forget this sensor\'s calibration?') && calSet('reset');
+$('#cal-done').onclick = closeCal;
+
 // ---- settings ----
 async function loadSettings() {
   config = await api('/api/config');
+  renderSensorForm();
   $('#name').value = config.name;
   $('#ssid').value = config.wifi_ssid;
   $('#wpass').placeholder = config.wifi_pass_set ? 'Saved. Leave blank to keep it.' : '';

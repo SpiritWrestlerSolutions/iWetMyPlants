@@ -43,3 +43,27 @@ Do these on both boards.
       `factory reset` and the setup network appears.
 - [ ] **C3 range.** The C3 transmits at 8.5 dBm (SuperMini antennas misbehave at full power). Note how
       far from the router it still connects reliably.
+
+## M2: sensors and calibration
+
+Wire sensors to the S ports as in [HARDWARE.md](HARDWARE.md). Serial prints a line each time the
+sensors are read (`S1 1834 mV 42%`), which helps while testing.
+
+- [ ] **Turn sensors on.** Sensors page: tick each port with a sensor, name it, save. Home shows one
+      card per sensor.
+- [ ] **Readings settle.** With "Read every 10 seconds (testing)", a sensor sitting still reads within
+      about ±30 mV from one read to the next.
+- [ ] **Calibrate.** Calibrate → hold the sensor in dry air, Set dry → stand it in water, Set wet.
+      The percentage goes to about 0% in air and about 100% in water, and follows the sensor as you
+      move it between the two. Home stops saying "Not calibrated yet".
+- [ ] **Calibration survives a restart.** System → Restart. Same dry/wet points afterwards.
+- [ ] **Bad calibration is refused.** Press Set wet while the sensor is still dry: the page says the
+      points are too close, and nothing changes.
+- [ ] **Unplugged sensor.** Unplug a calibrated sensor. Note what Home shows within a read or two.
+      ("Check the sensor" is the hope; input-only pins can float, so record what actually happens.)
+- [ ] **Needs water.** Set "Needs water below" above the current reading: the card turns amber and
+      says "Needs water".
+- [ ] **SHT (if fitted).** Pick SHT3x or SHT4x, save. Home shows an Air card with plausible
+      temperature and humidity. Breathe on it: humidity rises.
+- [ ] **Sensor power (if SPWR fitted).** Set the sensor power pin to 13 and save. The switched rail
+      is on only around each read, and readings match the always-on ones.

@@ -22,6 +22,8 @@ inline constexpr int8_t RELAY_DEFAULT_PINS[] = {16, 17, 18, 19, 23, 25, 26, 27};
 constexpr int8_t SDA_PIN = 21, SCL_PIN = 22, BOOT_PIN = 0;
 #endif
 
+constexpr uint16_t DEFAULT_DRY_MV = 2400, DEFAULT_WET_MV = 1100;   // placeholders until calibrated
+
 // ---- Config: the whole thing. Stored as JSON, so adding a field never wipes a device. ------
 struct SensorCfg {
   bool en;
@@ -85,6 +87,23 @@ void wifiLoop();
 bool wifiConnected();
 bool wifiSetupMode();           // the setup network is open
 void wifiScanJson(JsonObject out);
+
+// ---- sensors.cpp ---------------------------------------------------------------------------
+struct Readings {
+  int16_t mv[MAX_SENSORS];     // -1 = sensor off
+  int8_t pct[MAX_SENSORS];     // -1 = no usable percentage (off, or calibration points too close)
+  bool fault[MAX_SENSORS];     // far outside the calibrated range: unplugged or broken?
+  bool clipped[MAX_SENSORS];   // at the top of the ADC's range
+  float tempC, rh;             // NAN = no reading
+  int16_t batMv;               // -1 = no battery input
+  uint32_t at;                 // millis() of the last read, 0 = none yet
+};
+extern Readings rd;
+void sensorsBegin();
+void sensorsLoop();
+void sensorsLive();            // read every second for the next 10 s (the calibration page)
+const char* sensorsCalibrate(int slot, const char* point);   // "dry", "wet" or "reset"; nullptr = done
+void sensorsJson(JsonObject out);
 
 // ---- web.cpp -------------------------------------------------------------------------------
 void webBegin();

@@ -41,6 +41,21 @@ static void test_battery_pct() {
   TEST_ASSERT_EQUAL(75, batteryPct(4025));
 }
 
+static void test_sht_crc_matches_datasheet() {
+  const uint8_t word[] = {0xBE, 0xEF};                     // Sensirion's worked example
+  TEST_ASSERT_EQUAL_HEX8(0x92, shtCrc(word, 2));
+}
+
+static void test_sht_conversions() {
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -45.0f, shtTempC(0));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 130.0f, shtTempC(65535));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 25.0f, shtTempC(26214));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, shtRh(65535, false));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 50.0f, shtRh(32768, false));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, shtRh(0, true));   // SHT4x formula goes below 0: clamped
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 56.5f, shtRh(32768, true));
+}
+
 static void test_median() {
   int v[] = {5, 1, 9000, 3, 7};
   TEST_ASSERT_EQUAL(5, median(v, 5));
@@ -125,6 +140,8 @@ int main() {
   RUN_TEST(test_moisture_rejects_junk_calibration);
   RUN_TEST(test_sensor_fault);
   RUN_TEST(test_battery_pct);
+  RUN_TEST(test_sht_crc_matches_datasheet);
+  RUN_TEST(test_sht_conversions);
   RUN_TEST(test_median);
   RUN_TEST(test_zone_waits_out_soak_after_boot);
   RUN_TEST(test_zone_runs_then_soaks);

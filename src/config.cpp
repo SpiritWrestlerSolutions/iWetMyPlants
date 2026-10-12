@@ -21,8 +21,8 @@ void configDefaults(Config& c) {
     s.en = i == 0;
     snprintf(s.name, sizeof s.name, "Plant %d", i + 1);
     s.pin = ADC_PINS[i];
-    s.dry_mv = 2400;   // placeholder until calibrated
-    s.wet_mv = 1100;
+    s.dry_mv = DEFAULT_DRY_MV;
+    s.wet_mv = DEFAULT_WET_MV;
     s.warn_pct = 30;
   }
   for (int i = 0; i < MAX_RELAYS; i++) {

@@ -32,6 +32,22 @@ inline int batteryPct(int mv) {
   return i * 10 + (mv - curve[i]) * 10 / (curve[i + 1] - curve[i]);
 }
 
+// Sensirion CRC-8 (polynomial 0x31, start 0xFF): guards each 16-bit word an SHT sends.
+inline uint8_t shtCrc(const uint8_t* d, int n) {
+  uint8_t c = 0xFF;
+  for (int i = 0; i < n; i++) {
+    c ^= d[i];
+    for (int b = 0; b < 8; b++) c = c & 0x80 ? uint8_t(c << 1 ^ 0x31) : uint8_t(c << 1);
+  }
+  return c;
+}
+
+// SHT3x and SHT4x share the temperature formula; humidity differs.
+inline float shtTempC(uint16_t raw) { return -45 + 175.0f * raw / 65535; }
+inline float shtRh(uint16_t raw, bool sht4) {
+  return std::clamp(sht4 ? -6 + 125.0f * raw / 65535 : 100.0f * raw / 65535, 0.0f, 100.0f);
+}
+
 // Median of n samples (reorders the array). Throws away the ADC's spikes.
 inline int median(int* v, int n) {
   std::nth_element(v, v + n / 2, v + n);

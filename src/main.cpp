@@ -39,6 +39,7 @@ void factoryResetButton() {
 void setup() {
   Serial.begin(115200);
   bool saved = configLoad(cfg);
+  sensorsBegin();
   Serial.printf("\niWetMyPlants %s (%s%s) on %s, %s\n", IWMP_VERSION, IWMP_BUILD_HASH,
                 IWMP_BUILD_DIRTY ? "*" : "", ESP.getChipModel(), saved ? "settings loaded" : "no settings yet");
   esp_task_wdt_init(30, true);   // ponytail: IDF 4.4 signature; Arduino core 3.x needs esp_task_wdt_reconfigure()
@@ -51,6 +52,7 @@ void setup() {
 void loop() {
   wifiLoop();
   webLoop();
+  sensorsLoop();
   factoryResetButton();
   confirmFirmwareOnce();
 }

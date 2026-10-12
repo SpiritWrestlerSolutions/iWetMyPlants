@@ -74,6 +74,7 @@ const char* resetReason() {
 }
 
 void handleState() {
+  if (server.hasArg("live")) sensorsLive();
   JsonDocument d;
   d["id"] = deviceId();
   d["name"] = cfg.name;
@@ -89,6 +90,22 @@ void handleState() {
     w["ip"] = WiFi.localIP().toString();
     w["rssi"] = WiFi.RSSI();
   }
+  sensorsJson(d.as<JsonObject>());
+  sendJson(200, d);
+}
+
+// {"sensor": 0, "point": "dry" | "wet" | "reset"}. Saves without restarting.
+void handleCalibrate() {
+  if (!allowed()) return;
+  JsonDocument in;
+  if (deserializeJson(in, server.arg("plain")) || !in["sensor"].is<int>() || !in["point"].is<const char*>())
+    return sendError(400, "Send {\"sensor\": number, \"point\": \"dry\", \"wet\" or \"reset\"}");
+  int slot = in["sensor"];
+  if (const char* problem = sensorsCalibrate(slot, in["point"])) return sendError(400, problem);
+  JsonDocument d;
+  d["ok"] = true;
+  d["dry"] = cfg.s[slot].dry_mv;
+  d["wet"] = cfg.s[slot].wet_mv;
   sendJson(200, d);
 }
 
@@ -176,6 +193,7 @@ void webBegin() {
   server.on("/api/config", HTTP_GET, handleConfigGet);
   server.on("/api/config", HTTP_POST, handleConfigPost);
   server.on("/api/scan", HTTP_GET, handleScan);
+  server.on("/api/calibrate", HTTP_POST, handleCalibrate);
   server.on("/api/reboot", HTTP_POST, [] {
     if (!allowed()) return;
     sendOk();
