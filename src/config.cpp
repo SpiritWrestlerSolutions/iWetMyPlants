@@ -293,8 +293,10 @@ static void configHardwareOff(Config& c) {
 bool configLoad(Config& c) {
   configDefaults(c);
   Preferences p;
-  if (!p.begin(NVS_NS, true)) return false;   // nothing saved yet
-  size_t len = p.getBytesLength("cfg");
+  // Read-write open and isKey(): the read-only open and getBytesLength() both log an [E] line
+  // on a fresh unit, which looks like a fault when it's just "nothing saved yet".
+  if (!p.begin(NVS_NS, false)) return false;
+  size_t len = p.isKey("cfg") ? p.getBytesLength("cfg") : 0;
   std::unique_ptr<char[]> buf(new char[len + 1]);
   if (len) p.getBytes("cfg", buf.get(), len);
   p.end();
