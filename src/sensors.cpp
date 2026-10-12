@@ -137,6 +137,8 @@ const char* sensorsCalibrate(int slot, const char* point) {
   return nullptr;
 }
 
+int sensorPct(int slot) { return cfg.s[slot].en && !rd.fault[slot] ? rd.pct[slot] : -1; }
+
 void sensorsJson(JsonObject out) {
   JsonArray list = out["sensors"].to<JsonArray>();
   for (int i = 0; i < MAX_SENSORS; i++) {
@@ -150,7 +152,7 @@ void sensorsJson(JsonObject out) {
     o["dry"] = s.dry_mv;
     o["wet"] = s.wet_mv;
     o["calibrated"] = s.dry_mv != DEFAULT_DRY_MV || s.wet_mv != DEFAULT_WET_MV;
-    o["low"] = rd.pct[i] >= 0 && rd.pct[i] < s.warn_pct;
+    o["low"] = sensorPct(i) >= 0 && sensorPct(i) < s.warn_pct;
     o["fault"] = rd.fault[i];
     o["clipped"] = rd.clipped[i];
   }

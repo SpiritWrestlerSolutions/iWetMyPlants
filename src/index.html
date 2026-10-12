@@ -83,6 +83,13 @@ progress { width: 100%; height: .6rem; accent-color: var(--brand); margin-top: .
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0 1rem; margin-top: .7rem; }
 .fields .row { grid-column: 1 / -1; }
 .live { display: flex; align-items: baseline; gap: 1.2rem; margin: .4rem 0 .8rem; }
+/* other units */
+.unit { padding: .7rem 0; border-top: 1px solid var(--line); }
+.unit:first-child { border-top: 0; padding-top: 0; }
+.unit .top { display: flex; justify-content: space-between; gap: .5rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+.chips span { font-size: .82rem; padding: .15rem .6rem; border-radius: 999px; background: var(--sage-soft); color: var(--brand); }
+.chips span.low { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
 #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--bg) 88%, transparent); }
 #overlay .card { max-width: 26rem; }
 [hidden] { display: none !important; }
@@ -110,6 +117,10 @@ progress { width: 100%; height: .6rem; accent-color: var(--brand); margin-top: .
     <div class="card" id="air" hidden>
       <h2>Air</h2>
       <dl id="air-list"></dl>
+    </div>
+    <div class="card" id="others" hidden>
+      <h2>Other units</h2>
+      <div id="others-list"></div>
     </div>
     <div class="card">
       <h2>This unit</h2>
@@ -177,6 +188,17 @@ progress { width: 100%; height: .6rem; accent-color: var(--brand); margin-top: .
         <div class="nets" id="nets"></div>
         <label>Password <input type="password" id="wpass" maxlength="64" autocomplete="new-password"></label>
         <label class="check"><input type="checkbox" id="showpw"> Show password</label>
+      </div>
+
+      <div class="card">
+        <h2>MQTT and Home Assistant</h2>
+        <p class="hint">Readings go to your MQTT broker (in Home Assistant, that's usually the Mosquitto add-on). Leave the broker blank to turn MQTT off.</p>
+        <label>Broker address <input type="text" id="mqtt_host" maxlength="63" placeholder="e.g. 192.168.1.10 or homeassistant.local" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+        <label>Port <input type="number" id="mqtt_port" min="1" max="65535"></label>
+        <label>User name <input type="text" id="mqtt_user" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+        <label>Password <input type="password" id="mqtt_pass" maxlength="64" autocomplete="new-password"></label>
+        <label class="check"><input type="checkbox" id="ha"> Add this unit to Home Assistant by itself (MQTT discovery)</label>
+        <p class="hint" id="mqtt-topic"></p>
       </div>
 
       <div class="card">
@@ -276,10 +298,13 @@ async function refresh() {
   $('#status').textContent = w.setup ? 'Setup mode' : w.ip ? 'Online' : 'Joining WiFi…';
   $('#status').className = 'pill' + (w.ip ? '' : ' warn');
   renderPlants();
+  renderOthers();
+  const mqtt = { off: 'Off', connected: 'Connected', connecting: 'Trying to connect…' }[state.mqtt];
   list($('#unit'), [
     ['Name', state.name || 'Not set yet'],
     ['WiFi', w.setup ? 'Setup network is open' : w.ip ? `${w.ssid} (${signal(w.rssi)} signal)` : `Trying "${w.ssid}"…`],
     ['Address', w.ip ? `http://${state.id}.local/ (${w.ip})` : '—'],
+    ['MQTT', mqtt],
     ['Running for', uptime(state.up)],
   ]);
   list($('#about'), [
@@ -287,7 +312,21 @@ async function refresh() {
     ['Running for', uptime(state.up)], ['Last restart', state.reset],
     ['Free memory', `${Math.round(state.heap / 1024)} KB`],
     ['WiFi signal', w.ip ? `${w.rssi} dBm (${signal(w.rssi)})` : '—'], ['IP address', w.ip || '—'],
+    ['MQTT', mqtt], ['MQTT topic', state.topic],
   ]);
+}
+
+// Other units on the same MQTT broker.
+function renderOthers() {
+  const units = state.units || [];
+  $('#others').hidden = !units.length;
+  $('#others-list').replaceChildren(...units.map(u => el('div', { className: 'unit' },
+    el('div', { className: 'top' }, el('b', { textContent: u.name }),
+      el('span', { className: 'note', textContent: `${ago(u.age)} ago` })),
+    el('div', { className: 'chips' },
+      ...u.sensors.map(s => el('span', { className: s.low ? 'low' : '', textContent: `${s.n || 'Sensor'} ${s.m ?? '—'}${s.m === undefined ? '' : '%'}` })),
+      ...(u.temp !== undefined ? [el('span', { textContent: `${u.temp} °C` })] : []),
+      ...(u.bat !== undefined ? [el('span', { className: u.bat < 20 ? 'low' : '', textContent: `Battery ${u.bat}%` })] : [])))));
 }
 
 // ---- home: one card per sensor ----
@@ -420,6 +459,12 @@ async function loadSettings() {
   $('#wpass').placeholder = config.wifi_pass_set ? 'Saved. Leave blank to keep it.' : '';
   $('#apass').placeholder = config.admin_pass_set ? 'Leave blank to keep the current one' : 'No password set';
   $('#apass-clear').closest('label').hidden = !config.admin_pass_set;
+  $('#mqtt_host').value = config.mqtt_host;
+  $('#mqtt_port').value = config.mqtt_port;
+  $('#mqtt_user').value = config.mqtt_user;
+  $('#mqtt_pass').placeholder = config.mqtt_pass_set ? 'Saved. Leave blank to keep it.' : '';
+  $('#ha').checked = config.ha_discovery;
+  $('#mqtt-topic').textContent = state.topic ? `Readings are published to ${state.topic}` : '';
   $('#welcome').hidden = !(state.wifi.setup && !config.wifi_ssid);
   scan();
 }
@@ -445,6 +490,10 @@ $('#form').onsubmit = async e => {
   const body = { name: $('#name').value.trim(), wifi_ssid: $('#ssid').value.trim() };
   // A password belongs to its network: send it when typed, or when the network changed (blank = open network).
   if ($('#wpass').value || body.wifi_ssid !== config.wifi_ssid) body.wifi_pass = $('#wpass').value;
+  Object.assign(body, { mqtt_host: $('#mqtt_host').value.trim(), mqtt_port: Math.round(+$('#mqtt_port').value) || 1883,
+    mqtt_user: $('#mqtt_user').value.trim(), ha_discovery: $('#ha').checked });
+  // Same rule as WiFi: send the MQTT password when typed; no user name means no password.
+  if ($('#mqtt_pass').value || !body.mqtt_user) body.mqtt_pass = $('#mqtt_pass').value;
   if ($('#apass').value) body.admin_pass = $('#apass').value;
   else if ($('#apass-clear').checked) body.admin_pass = '';
   if (!body.wifi_ssid) return say('#form-msg', 'Enter your WiFi network name.', 'err');

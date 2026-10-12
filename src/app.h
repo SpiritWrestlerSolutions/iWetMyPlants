@@ -103,7 +103,13 @@ void sensorsBegin();
 void sensorsLoop();
 void sensorsLive();            // read every second for the next 10 s (the calibration page)
 const char* sensorsCalibrate(int slot, const char* point);   // "dry", "wet" or "reset"; nullptr = done
+int sensorPct(int slot);       // moisture % to act on, or -1 (off, faulty, or no usable calibration)
 void sensorsJson(JsonObject out);
+
+// ---- mqtt.cpp ------------------------------------------------------------------------------
+void mqttBegin();
+void mqttLoop();
+void mqttJson(JsonObject out);   // connection status and the other units, for the page
 
 // ---- web.cpp -------------------------------------------------------------------------------
 void webBegin();

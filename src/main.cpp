@@ -47,12 +47,14 @@ void setup() {
   pinMode(BOOT_PIN, INPUT_PULLUP);
   wifiBegin();
   webBegin();
+  mqttBegin();
 }
 
 void loop() {
   wifiLoop();
   webLoop();
   sensorsLoop();
+  mqttLoop();
   factoryResetButton();
   confirmFirmwareOnce();
 }

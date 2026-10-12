@@ -164,6 +164,7 @@ const char* validate(const Config& n) {
   bad = false;
   prefix[0] = 0;
   if (n.sht != 0 && n.sht != 3 && n.sht != 4) fail("Temperature sensor must be none, SHT3x or SHT4x");
+  if (strpbrk(n.mqtt_host, ":/ ")) fail("MQTT broker is just the address, like 192.168.1.10 or homeassistant.local");
 
   // Every pin in use, with who uses it, to catch doubles.
   struct Use { int8_t pin; char who[16]; } use[MAX_SENSORS + MAX_RELAYS + 4];

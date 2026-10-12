@@ -91,6 +91,7 @@ void handleState() {
     w["rssi"] = WiFi.RSSI();
   }
   sensorsJson(d.as<JsonObject>());
+  mqttJson(d.as<JsonObject>());
   sendJson(200, d);
 }
 

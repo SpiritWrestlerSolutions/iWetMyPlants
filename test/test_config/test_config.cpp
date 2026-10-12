@@ -100,6 +100,13 @@ static void test_battery_mode_rules() {
   TEST_ASSERT_NULL(apply(c, R"({"sleep": true, "mqtt_host": "ha.local"})"));
 }
 
+static void test_mqtt_broker_is_a_bare_address() {
+  Config c = fresh();
+  ASSERT_REFUSED(c, R"({"mqtt_host": "mqtt://192.168.1.10"})", "just the address");
+  ASSERT_REFUSED(c, R"({"mqtt_host": "192.168.1.10:1883"})", "just the address");
+  TEST_ASSERT_NULL(apply(c, R"({"mqtt_host": "homeassistant.local"})"));
+}
+
 static void test_temperature_sensor_type() {
   Config c = fresh();
   ASSERT_REFUSED(c, R"({"sht": 5})", "SHT3x or SHT4x");
@@ -150,6 +157,7 @@ int main() {
   RUN_TEST(test_a_pin_can_only_be_used_once);
   RUN_TEST(test_relay_must_follow_a_sensor_that_is_on);
   RUN_TEST(test_battery_mode_rules);
+  RUN_TEST(test_mqtt_broker_is_a_bare_address);
   RUN_TEST(test_temperature_sensor_type);
   RUN_TEST(test_passwords_are_write_only);
   RUN_TEST(test_saved_json_reloads_identically);

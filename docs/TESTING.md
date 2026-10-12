@@ -67,3 +67,26 @@ sensors are read (`S1 1834 mV 42%`), which helps while testing.
       temperature and humidity. Breathe on it: humidity rises.
 - [ ] **Sensor power (if SPWR fitted).** Set the sensor power pin to 13 and save. The switched rail
       is on only around each read, and readings match the always-on ones.
+
+## M3: MQTT and Home Assistant
+
+Needs an MQTT broker (in Home Assistant: the Mosquitto add-on, plus the MQTT integration).
+
+- [ ] **Connects.** Settings → MQTT: broker address (no `mqtt://`, no port), port, user name,
+      password; save. Serial shows `MQTT connected`; Home shows MQTT "Connected".
+- [ ] **Bad broker details.** A wrong password or address shows "Trying to connect…" and nothing else
+      breaks: the page still works and sensors keep reading. Fix it and it connects without a restart
+      loop.
+- [ ] **Home Assistant finds it.** Settings → Devices & services → MQTT: the unit appears as a device
+      named after the unit, with one moisture entity per sensor that's turned on, plus WiFi signal
+      (and temperature/humidity if an SHT is fitted). Values match the unit's Home page.
+- [ ] **Entities follow the settings.** Turn a sensor off and save: its entity disappears from Home
+      Assistant. Rename a sensor: the entity name follows.
+- [ ] **Unavailable when unplugged.** Pull the unit's power: within about a minute its entities show
+      "Unavailable". Plug it back in: they come back.
+- [ ] **Broker restart.** Restart the broker (or Home Assistant). The unit reconnects by itself and
+      its entities come back without touching the unit.
+- [ ] **Overview.** With two units on the same broker, each one's Home page shows the other under
+      "Other units", with its sensor readings.
+- [ ] **Raw topic.** `mosquitto_sub -h <broker> -u <user> -P <pass> -t 'iwetmyplants/#' -v` shows the
+      unit's `…/state` JSON and `…/status` `online`.
